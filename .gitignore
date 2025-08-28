@@ -1,0 +1,11 @@
+# Ignore Visual Studio Code Settings
+.vs/
+
+# Ignore build folders
+NessStudio/bin/
+NessStudio/obj/
+
+# Ignore ffmpeg executables
+NessStudio/Modules/ffmpeg.exe
+NessStudio/Modules/ffplay.exe
+NessStudio/Modules/ffprobe.exe

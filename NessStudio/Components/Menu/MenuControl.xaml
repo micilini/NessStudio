@@ -1,0 +1,50 @@
+﻿<UserControl x:Class="NessStudio.Components.Menu.MenuControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:NessStudio.Components.Menu"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             mc:Ignorable="d" 
+             d:DesignHeight="600" d:DesignWidth="250">
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <Border BorderBrush="#202C34" BorderThickness="2" Background="Transparent" CornerRadius="6" HorizontalAlignment="Stretch" Padding="3" Height="50" Margin="0 0 0 50">
+                <TextBlock Text="Welcome, to Ness!" VerticalAlignment="Center" HorizontalAlignment="Center" TextWrapping="NoWrap" Foreground="#CCD5D7" FontFamily="Arial" FontSize="16" Margin="0 0 0 0"/>
+            </Border>
+
+            <Button Command="{Binding NewProjectCommand}" Cursor="No" Style="{StaticResource MaterialDesignFlatButton}" HorizontalContentAlignment="Left" Padding="5 0 0 0" Foreground="{DynamicResource PrimaryHueLightForegroundBrush}" materialDesign:ButtonAssist.CornerRadius="6" Width="Auto" Height="50" materialDesign:RippleAssist.Feedback="White" Margin="0 5 0 0">
+                <WrapPanel HorizontalAlignment="Left" Width="Auto">
+                    <Image RenderOptions.BitmapScalingMode="HighQuality" Source="/Assets/Images/file-icon.png" VerticalAlignment="Center" Margin="0 0 20 0" Width="35" Height="35" />
+                    <TextBlock FontSize="16" FontFamily="Arial" FontWeight="Bold" Margin="-10 9 0 0" Foreground="#e74c3c">New Project</TextBlock>
+                </WrapPanel>
+            </Button>
+
+            <Button Command="{Binding OpenProjectCommand}" Cursor="No" Style="{StaticResource MaterialDesignFlatButton}" HorizontalContentAlignment="Left" Padding="5 0 0 0" Foreground="{DynamicResource PrimaryHueLightForegroundBrush}" materialDesign:ButtonAssist.CornerRadius="6" Width="Auto" Height="50" materialDesign:RippleAssist.Feedback="White" Margin="0 5 0 0">
+                <WrapPanel HorizontalAlignment="Left" Width="Auto">
+                    <Image RenderOptions.BitmapScalingMode="HighQuality" Source="/Assets/Images/open-icon.png" VerticalAlignment="Center" Margin="0 0 20 0" Width="35" Height="35" />
+                    <TextBlock FontSize="16" FontFamily="Arial" FontWeight="Bold" Margin="-10 9 0 0" Foreground="#e74c3c">Open Project</TextBlock>
+                </WrapPanel>
+            </Button>
+
+            <Button Command="{Binding StartRecordingCommand}" Style="{StaticResource MaterialDesignFlatButton}" HorizontalContentAlignment="Left" Padding="5 0 0 0" Foreground="{DynamicResource PrimaryHueLightForegroundBrush}" materialDesign:ButtonAssist.CornerRadius="6" Width="Auto" Height="50" materialDesign:RippleAssist.Feedback="White" Margin="0 5 0 0">
+                <WrapPanel HorizontalAlignment="Left" Width="Auto">
+                    <Image RenderOptions.BitmapScalingMode="HighQuality" Source="/Assets/Images/record-icon.png" VerticalAlignment="Center" Margin="0 0 20 0" Width="35" Height="35" />
+                    <TextBlock FontSize="16" FontFamily="Arial" FontWeight="Bold" Margin="-10 9 0 0" Foreground="#CCD5D7">Start Recording</TextBlock>
+                </WrapPanel>
+            </Button>
+        </StackPanel>
+
+        <Button Command="{Binding AboutAppCommand}" Grid.Row="1" Style="{StaticResource MaterialDesignFlatButton}" VerticalAlignment="Bottom" HorizontalContentAlignment="Left" Padding="5 0 0 0" Foreground="{DynamicResource PrimaryHueLightForegroundBrush}" materialDesign:ButtonAssist.CornerRadius="6" Width="Auto" Height="50" materialDesign:RippleAssist.Feedback="White" Margin="0 5 0 0">
+            <WrapPanel HorizontalAlignment="Left" Width="Auto">
+                <Image RenderOptions.BitmapScalingMode="HighQuality" Source="/Assets/Images/info-icon.png" VerticalAlignment="Center" Margin="0 0 20 0" Width="35" Height="35" />
+                <TextBlock FontSize="16" FontFamily="Arial" FontWeight="Bold" Margin="-10 9 0 0" Foreground="#CCD5D7">About Application</TextBlock>
+            </WrapPanel>
+        </Button>
+    </Grid>
+</UserControl>

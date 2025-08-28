@@ -1,0 +1,96 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <ApplicationIcon>logo-nessstudio.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Assets\Images\close-icon-white.png" />
+    <None Remove="Assets\Images\delete-icon.png" />
+    <None Remove="Assets\Images\file-icon.png" />
+    <None Remove="Assets\Images\form-one.png" />
+    <None Remove="Assets\Images\form-two.png" />
+    <None Remove="Assets\Images\info-icon.png" />
+    <None Remove="Assets\Images\logo-nessstudio.png" />
+    <None Remove="Assets\Images\maximize-icon.png" />
+    <None Remove="Assets\Images\microfone-closed-icon.png" />
+    <None Remove="Assets\Images\microfone-icon.png" />
+    <None Remove="Assets\Images\minimize-icon-white.png" />
+    <None Remove="Assets\Images\open-icon.png" />
+    <None Remove="Assets\Images\pause-icon.png" />
+    <None Remove="Assets\Images\play-icon.png" />
+    <None Remove="Assets\Images\preview-sound.png" />
+    <None Remove="Assets\Images\rec-icon.png" />
+    <None Remove="Assets\Images\record-icon.png" />
+    <None Remove="Assets\Images\sad-icon.png" />
+    <None Remove="Assets\Images\stop-icon.png" />
+    <None Remove="Assets\Images\system-audio-closed-icon.png" />
+    <None Remove="Assets\Images\system-audio-icon.png" />
+    <None Remove="Assets\Images\windowed-icon.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="logo-nessstudio.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DirectShowLib" Version="1.0.0" />
+    <PackageReference Include="MaterialDesignColors" Version="5.2.1" />
+    <PackageReference Include="MaterialDesignThemes" Version="5.2.1" />
+    <PackageReference Include="Microsoft.Xaml.Behaviors.Wpf" Version="1.1.135" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="OpenCvSharp4" Version="4.11.0.20250507" />
+    <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.11.0.20250507" />
+    <PackageReference Include="OpenCvSharp4.WpfExtensions" Version="4.11.0.20250507" />
+    <PackageReference Include="sqlite-net-pcl" Version="1.9.172" />
+    <PackageReference Include="sqlite-net-sqlcipher" Version="1.9.172" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\Images\close-icon-black.png" />
+    <Resource Include="Assets\Images\close-icon-white.png" />
+    <Resource Include="Assets\Images\delete-icon.png" />
+    <Resource Include="Assets\Images\file-icon.png" />
+    <Resource Include="Assets\Images\form-one.png" />
+    <Resource Include="Assets\Images\form-two.png" />
+    <Resource Include="Assets\Images\info-icon.png" />
+    <Resource Include="Assets\Images\logo-nessstudio.png" />
+    <Resource Include="Assets\Images\maximize-icon.png" />
+    <Resource Include="Assets\Images\microfone-closed-icon.png" />
+    <Resource Include="Assets\Images\microfone-icon.png" />
+    <Resource Include="Assets\Images\minimize-icon-black.png" />
+    <Resource Include="Assets\Images\minimize-icon-white.png" />
+    <Resource Include="Assets\Images\open-icon.png" />
+    <Resource Include="Assets\Images\pause-icon.png" />
+    <Resource Include="Assets\Images\play-icon.png" />
+    <Resource Include="Assets\Images\preview-sound.png" />
+    <Resource Include="Assets\Images\rec-icon.png" />
+    <Resource Include="Assets\Images\record-icon.png" />
+    <Resource Include="Assets\Images\sad-icon.png" />
+    <Resource Include="Assets\Images\stop-icon.png" />
+    <Resource Include="Assets\Images\system-audio-closed-icon.png" />
+    <Resource Include="Assets\Images\system-audio-icon.png" />
+    <Resource Include="Assets\Images\windowed-icon.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Modules\ffmpeg.exe">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Modules\ffplay.exe">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Modules\ffprobe.exe">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Modules\info.txt">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,45 @@
+﻿<UserControl x:Class="NessStudio.Components.RecentProjects.RecentProjectsControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:NessStudio.Components.RecentProjects"
+             mc:Ignorable="d"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             d:DesignHeight="706" d:DesignWidth="774">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Style="{StaticResource MaterialDesignScrollViewer}" Foreground="White" >
+        <Grid Margin="25 40">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="80" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <StackPanel Grid.Row="0">
+                <TextBlock Text="Recent Recodings" FontFamily="Arial" FontWeight="Bold" FontSize="24" Foreground="#CCD5D7" />
+                <TextBlock Text="Review your most recent screen recordings and manage them with ease." TextWrapping="Wrap" FontFamily="Arial" FontWeight="Normal" FontSize="18" Foreground="#CCD5D7" Margin="0 12 0 0" />
+            </StackPanel>
+            <StackPanel Grid.Row="1" >
+                <StackPanel Visibility="{Binding IsLoadingProjectBlockVisible, Converter={StaticResource BoolToVis}, Mode=OneWay}" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,40,0,0">
+                    <ProgressBar IsIndeterminate="True" Width="140" Height="6" BorderBrush="Transparent" />
+                    <TextBlock Text="Loading Projects"  Margin="0,12,0,0" Foreground="#708089" FontSize="16" HorizontalAlignment="Center"/>
+                </StackPanel>
+
+                <StackPanel Visibility="{Binding IsNoneProjectBlockVisible, Converter={StaticResource BoolToVis}, Mode=OneWay}" Margin="0 40 0 0">
+                    <Image RenderOptions.BitmapScalingMode="HighQuality" Source="/Assets/Images/sad-icon.png" VerticalAlignment="Center" Margin="0 0 20 0" Width="180" Height="180" Opacity="0.4" />
+                    <TextBlock HorizontalAlignment="Center" FontSize="18" FontFamily="Arial" FontWeight="Bold" Margin="-10 9 0 0" TextWrapping="Wrap" Foreground="#CCD5D7">Looks like you haven’t created any recordings yet.</TextBlock>
+                </StackPanel>
+
+                <ScrollViewer Visibility="{Binding IsProjectBlockVisible, Converter={StaticResource BoolToVis}, Mode=OneWay}"
+                      VerticalScrollBarVisibility="Auto" HorizontalAlignment="Left" VerticalAlignment="Top">
+                    <StackPanel>
+                        <WrapPanel x:Name="ProjectsWrapPanel" Margin="8" HorizontalAlignment="Left" VerticalAlignment="Top"/>
+                    </StackPanel>
+                </ScrollViewer>
+                
+                <StackPanel Visibility="{Binding IsProjectBlockVisible, Converter={StaticResource BoolToVis}, Mode=OneWay}">
+                    <Button Command="{Binding OpenFolderRecordingCommand}" Content="More Recordings" FontFamily="Arial" FontSize="18" Background="red" Foreground="white" Width="220" Height="40" BorderBrush="Transparent" Margin="0 50 0 0" />
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</UserControl>
