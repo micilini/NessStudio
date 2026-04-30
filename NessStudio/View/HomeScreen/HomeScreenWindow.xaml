@@ -21,31 +21,25 @@
             GlassFrameThickness="0"
             UseAeroCaptionButtons="False"/>
     </shell:WindowChrome.WindowChrome>
-        
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="60" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-
         <materialDesign:ColorZone Grid.Row="0" Height="Auto" Background="#23272A" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" >
             <ContentControl Content="{Binding HeaderContent}" />
         </materialDesign:ColorZone>
-
         <materialDesign:ColorZone Grid.Row="1" Height="Auto" Background="#17191A" VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="250" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-
                 <Border Grid.Column="0" BorderBrush="#202C34" BorderThickness="0,0,2,0" Background="Transparent">
                     <ContentControl Content="{Binding MenuContent}" />
                 </Border>
-
                 <ContentControl Content="{Binding ProjectsContent}" Grid.Column="1" />
-
             </Grid>
         </materialDesign:ColorZone>
     </Grid>
-</Window>
+</Window>

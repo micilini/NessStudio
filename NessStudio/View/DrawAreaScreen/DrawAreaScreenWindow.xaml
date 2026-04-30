@@ -18,7 +18,6 @@
     <Canvas x:Name="RootCanvas">
         <Rectangle Fill="#66000000" Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Window}}"
                    Height="{Binding ActualHeight, RelativeSource={RelativeSource AncestorType=Window}}"/>
-
         <Rectangle x:Name="SelectionRect"
                    Stroke="Red" StrokeThickness="5"
                    StrokeDashArray="6,6"
@@ -27,7 +26,6 @@
                    MouseLeftButtonDown="SelectionRect_MouseLeftButtonDown"
                    MouseMove="SelectionRect_MouseMove"
                    MouseLeftButtonUp="SelectionRect_MouseLeftButtonUp"/>
-
         <Border x:Name="Hud"
                 Background="#AA000000"
                 CornerRadius="6"
@@ -47,7 +45,6 @@
                            Text="[Enter] to continue   •   [Esc] to exit"/>
             </StackPanel>
         </Border>
-
         <Thumb x:Name="HandleNW" DragDelta="HandleNW_DragDelta" Width="14" Height="14" Background="Red" Cursor="SizeNWSE"/>
         <Thumb x:Name="HandleN"  DragDelta="HandleN_DragDelta"  Width="14" Height="14" Background="Red" Cursor="SizeNS"/>
         <Thumb x:Name="HandleNE" DragDelta="HandleNE_DragDelta" Width="14" Height="14" Background="Red" Cursor="SizeNESW"/>
@@ -56,6 +53,5 @@
         <Thumb x:Name="HandleS"  DragDelta="HandleS_DragDelta"  Width="14" Height="14" Background="Red" Cursor="SizeNS"/>
         <Thumb x:Name="HandleSW" DragDelta="HandleSW_DragDelta" Width="14" Height="14" Background="Red" Cursor="SizeNESW"/>
         <Thumb x:Name="HandleW"  DragDelta="HandleW_DragDelta"  Width="14" Height="14" Background="Red" Cursor="SizeWE"/>
-
     </Canvas>
 </Window>

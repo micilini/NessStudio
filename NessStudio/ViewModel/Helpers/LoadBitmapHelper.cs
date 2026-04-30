@@ -5,7 +5,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
-
 namespace NessStudio.ViewModel.Helpers
 {
     public class LoadBitmapHelper
@@ -22,7 +21,6 @@ namespace NessStudio.ViewModel.Helpers
             bmp.Freeze();
             return bmp;
         }
-
         public static BitmapSource LoadBitmapFromPack(string packUri)
         {
             var bmp = new BitmapImage();
@@ -34,4 +32,4 @@ namespace NessStudio.ViewModel.Helpers
             return bmp;
         }
     }
-}
+}

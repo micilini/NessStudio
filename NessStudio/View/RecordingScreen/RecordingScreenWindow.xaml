@@ -1,4 +1,5 @@
 ﻿<Window x:Class="NessStudio.View.RecordingScreen.RecordingScreenWindow"
+        x:Name="RootWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -10,18 +11,160 @@
         WindowStartupLocation="CenterScreen"
         Background="#1C1F21"
         Title="Ness Studio Recorder"
-        Height="221" Width="710"
-        MinHeight="221" MaxHeight="221"
+        Height="250" Width="710"
+        MinHeight="250" MaxHeight="250"
         MinWidth="710"  MaxWidth="710">
     <Grid>
-        <Grid Margin="8,6,8,8" x:Name="GridRecordSettings" Visibility="{Binding IsSettingsPanelVisible, Converter={StaticResource BoolToVis}}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <Border Grid.Row="0"
+            Background="#232629"
+            BorderBrush="#2A2F33"
+            BorderThickness="0,0,0,1"
+            Visibility="{Binding IsSettingsPanelVisible, Converter={StaticResource BoolToVis}}">
+            <Menu Background="#232629"
+              Foreground="#CCD5D7"
+              BorderThickness="0"
+              Padding="6,0,6,0">
+                <Menu.Resources>
+                    <Style TargetType="MenuItem">
+                        <Setter Property="Background" Value="#232629"/>
+                        <Setter Property="Foreground" Value="#CCD5D7"/>
+                        <Setter Property="FontSize" Value="12"/>
+                        <Setter Property="Padding" Value="10,4"/>
+                        <Setter Property="Height" Value="30"/>
+                        <Setter Property="MinWidth" Value="120"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="MenuItem">
+                                    <Border x:Name="RootBorder"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="Transparent"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        SnapsToDevicePixels="True">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="6"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="18"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Border x:Name="SelectedMarker"
+                                Grid.Column="0"
+                                Width="3"
+                                Margin="2,4,1,4"
+                                CornerRadius="2"
+                                Background="#FF5A5A"
+                                Visibility="Collapsed"/>
+                                            <ContentPresenter Grid.Column="1"
+                                          ContentSource="Header"
+                                          Margin="8,0,10,0"
+                                          VerticalAlignment="Center"
+                                          RecognizesAccessKey="True"/>
+                                            <Path x:Name="SubmenuArrow"
+                              Grid.Column="2"
+                              Margin="0,0,8,0"
+                              VerticalAlignment="Center"
+                              HorizontalAlignment="Center"
+                              Fill="#CCD5D7"
+                              Data="M 0 0 L 4 4 L 0 8 Z"
+                              Visibility="Collapsed"/>
+                                            <Popup x:Name="PART_Popup"
+                               AllowsTransparency="True"
+                               Focusable="False"
+                               IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                               Placement="Bottom"
+                               PopupAnimation="Fade">
+                                                <Border Background="#232629"
+                                    BorderBrush="#2A2F33"
+                                    BorderThickness="1"
+                                    CornerRadius="4"
+                                    Padding="4">
+                                                    <StackPanel IsItemsHost="True"
+                                            KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                                                </Border>
+                                            </Popup>
+                                        </Grid>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="Role" Value="TopLevelHeader">
+                                            <Setter Property="MinWidth" Value="90"/>
+                                            <Setter TargetName="SubmenuArrow" Property="Visibility" Value="Collapsed"/>
+                                        </Trigger>
+                                        <Trigger Property="Role" Value="SubmenuHeader">
+                                            <Setter TargetName="SubmenuArrow" Property="Visibility" Value="Visible"/>
+                                            <Setter TargetName="PART_Popup" Property="Placement" Value="Right"/>
+                                        </Trigger>
+                                        <Trigger Property="Role" Value="SubmenuItem">
+                                            <Setter TargetName="SubmenuArrow" Property="Visibility" Value="Collapsed"/>
+                                        </Trigger>
+                                        <Trigger Property="IsHighlighted" Value="True">
+                                            <Setter TargetName="RootBorder" Property="Background" Value="#2E3338"/>
+                                            <Setter TargetName="RootBorder" Property="BorderBrush" Value="#3A4045"/>
+                                        </Trigger>
+                                        <Trigger Property="IsSubmenuOpen" Value="True">
+                                            <Setter TargetName="RootBorder" Property="Background" Value="#2E3338"/>
+                                            <Setter TargetName="RootBorder" Property="BorderBrush" Value="#3A4045"/>
+                                        </Trigger>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter TargetName="RootBorder" Property="Background" Value="#3A2020"/>
+                                            <Setter TargetName="RootBorder" Property="BorderBrush" Value="#FF5A5A"/>
+                                            <Setter Property="Foreground" Value="#FFFFFF"/>
+                                            <Setter TargetName="SelectedMarker" Property="Visibility" Value="Visible"/>
+                                        </Trigger>
+                                        <Trigger Property="IsEnabled" Value="False">
+                                            <Setter Property="Foreground" Value="#708089"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                    <Style x:Key="SettingsLeafMenuItemStyle" TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+                        <Setter Property="IsCheckable" Value="True"/>
+                        <Setter Property="StaysOpenOnClick" Value="False"/>
+                        <Setter Property="MinWidth" Value="110"/>
+                    </Style>
+                </Menu.Resources>
+                <MenuItem Header="Settings" IsEnabled="{Binding IsEditEnabled}">
+                    <MenuItem Header="FPS">
+                        <MenuItem.ItemsSource>
+                            <Binding Path="FpsOptions"/>
+                        </MenuItem.ItemsSource>
+                        <MenuItem.ItemContainerStyle>
+                            <Style TargetType="MenuItem" BasedOn="{StaticResource SettingsLeafMenuItemStyle}">
+                                <Setter Property="Header" Value="{Binding Label}"/>
+                                <Setter Property="Command" Value="{Binding DataContext.SelectFpsOptionCommand, ElementName=RootWindow}"/>
+                                <Setter Property="CommandParameter" Value="{Binding Value}"/>
+                                <Setter Property="IsChecked" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                            </Style>
+                        </MenuItem.ItemContainerStyle>
+                    </MenuItem>
+                    <MenuItem Header="Timer">
+                        <MenuItem.ItemsSource>
+                            <Binding Path="TimerOptions"/>
+                        </MenuItem.ItemsSource>
+                        <MenuItem.ItemContainerStyle>
+                            <Style TargetType="MenuItem" BasedOn="{StaticResource SettingsLeafMenuItemStyle}">
+                                <Setter Property="Header" Value="{Binding Label}"/>
+                                <Setter Property="Command" Value="{Binding DataContext.SelectTimerOptionCommand, ElementName=RootWindow}"/>
+                                <Setter Property="CommandParameter" Value="{Binding Value}"/>
+                                <Setter Property="IsChecked" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                            </Style>
+                        </MenuItem.ItemContainerStyle>
+                    </MenuItem>
+                </MenuItem>
+            </Menu>
+        </Border>
+        <Grid Grid.Row="1" Margin="8,6,8,8" x:Name="GridRecordSettings" Visibility="{Binding IsSettingsPanelVisible, Converter={StaticResource BoolToVis}}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="170"/>
                 <ColumnDefinition Width="175"/>
                 <ColumnDefinition Width="175"/>
                 <ColumnDefinition Width="175"/>
             </Grid.ColumnDefinitions>
-
             <Border Grid.Column="0"
              CornerRadius="8"
              BorderBrush="#2A2F33"
@@ -34,7 +177,6 @@
                         <RowDefinition Height="8"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-
                     <Border Grid.Row="0" IsEnabled="{Binding IsEditEnabled}" IsHitTestVisible="{Binding IsEditEnabled}"
                      Width="157" Height="116"
                      HorizontalAlignment="Center"
@@ -42,17 +184,23 @@
                      Background="#2E3337"
                      BorderBrush="#3A4045"
                      BorderThickness="1">
-
                         <StackPanel>
                             <TextBlock Text="Screen Monitor"
-             FontSize="12"
-             Foreground="#CCD5D7"
-             HorizontalAlignment="Center"
-             Margin="0 45 0 0"
-             Visibility="{Binding IsScreenEnabled,
-                                  Converter={StaticResource InvertBoolToVisibility},
-                                  Mode=OneWay}"/>
-
+           FontSize="12"
+           Foreground="#CCD5D7"
+           HorizontalAlignment="Center"
+           Margin="0 45 0 0">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsScreenEnabled}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
                             <TextBlock Text="{Binding DrawAreaInfoText}"
            FontSize="12"
            Foreground="#CCD5D7"
@@ -62,7 +210,6 @@
            Visibility="{Binding IsDrawAreaInfoVisible,
                                 Converter={StaticResource BoolToVis},
                                 Mode=OneWay}"/>
-
                             <Image Source="{Binding ScreenPreviewImage}" RenderOptions.BitmapScalingMode="LowQuality" CacheMode="BitmapCache"
          Width="157" Height="116"
          Stretch="Uniform"
@@ -73,17 +220,13 @@
                               Converter={StaticResource BoolToVis},
                               Mode=OneWay}"/>
                         </StackPanel>
-
-
                     </Border>
-
                     <Grid Grid.Row="2">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="8"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-
                         <ToggleButton Grid.Column="0"
                                Style="{StaticResource MaterialDesignSwitchToggleButton}"
                                VerticalAlignment="Center"
@@ -95,7 +238,6 @@
                                 FontSize="12"
                                 Margin="6,0,0,0"/>
                         </ToggleButton>
-
                         <ComboBox
     Grid.Column="2"
                             IsEnabled="{Binding IsScreenEnabled}"  IsHitTestVisible="{Binding IsEditEnabled}"
@@ -108,7 +250,6 @@
     Padding="0"
     Foreground="#CCD5D7"
     IsEditable="False">
-
                             <ComboBox.Template>
                                 <ControlTemplate TargetType="ComboBox">
                                     <Grid SnapsToDevicePixels="True">
@@ -135,7 +276,6 @@
                                                                 <ColumnDefinition/>
                                                                 <ColumnDefinition Width="18"/>
                                                             </Grid.ColumnDefinitions>
-
                                                             <ContentPresenter
                                         Margin="0"
                                         VerticalAlignment="Center"
@@ -143,7 +283,6 @@
                                         Content="{Binding SelectionBoxItem, RelativeSource={RelativeSource AncestorType=ComboBox}}"
                                         ContentTemplate="{Binding SelectionBoxItemTemplate, RelativeSource={RelativeSource AncestorType=ComboBox}}"
                                         ContentTemplateSelector="{Binding ItemTemplateSelector, RelativeSource={RelativeSource AncestorType=ComboBox}}"/>
-
                                                             <Path x:Name="Arrow"
                                           Grid.Column="1"
                                           HorizontalAlignment="Center"
@@ -168,7 +307,6 @@
                                                 </ControlTemplate>
                                             </ToggleButton.Template>
                                         </ToggleButton>
-
                                         <Popup x:Name="PART_Popup"
                        Placement="Bottom"
                        AllowsTransparency="True"
@@ -189,7 +327,6 @@
                                     </Grid>
                                 </ControlTemplate>
                             </ComboBox.Template>
-
                             <ComboBox.ItemContainerStyle>
                                 <Style TargetType="ComboBoxItem">
                                     <Setter Property="Foreground" Value="#CCD5D7"/>
@@ -212,11 +349,9 @@
                                 </Style>
                             </ComboBox.ItemContainerStyle>
                         </ComboBox>
-
                     </Grid>
                 </Grid>
             </Border>
-
             <Border Grid.Column="1" IsEnabled="{Binding IsEditEnabled}" IsHitTestVisible="{Binding IsEditEnabled}"
              Margin="5 0 0 0"
      CornerRadius="8"
@@ -230,7 +365,6 @@
                         <RowDefinition Height="8"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-
                     <Border Grid.Row="0"
              Width="157" Height="116"
              HorizontalAlignment="Center"
@@ -240,14 +374,21 @@
              BorderThickness="1">
                         <StackPanel>
                             <TextBlock Text="Screen Webcam"
-FontSize="12"
-Foreground="#CCD5D7"
-HorizontalAlignment="Center"
-Margin="0 45 0 0"
-Visibility="{Binding IsWebcamEnabled,
-                     Converter={StaticResource InvertBoolToVisibility},
-                     Mode=OneWay}"/>
-
+           FontSize="12"
+           Foreground="#CCD5D7"
+           HorizontalAlignment="Center"
+           Margin="0 45 0 0">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsWebcamEnabled}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
                             <Image Source="{Binding WebcamPreviewImage}" Visibility="{Binding IsWebcamEnabled, Converter={StaticResource BoolToVis}, Mode=OneWay}"
                         Width="157" Height="116"
                                    RenderOptions.BitmapScalingMode="LowQuality" CacheMode="BitmapCache"
@@ -257,14 +398,12 @@ Visibility="{Binding IsWebcamEnabled,
                         ClipToBounds="True"/>
                         </StackPanel>
                     </Border>
-
                     <Grid Grid.Row="2">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="8"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-
                         <ToggleButton x:Name="tglWebcam"
            Style="{StaticResource MaterialDesignSwitchToggleButton}"
            VerticalAlignment="Center"
@@ -272,8 +411,6 @@ Visibility="{Binding IsWebcamEnabled,
            IsChecked="{Binding IsWebcamEnabled, Mode=TwoWay}">
                             <TextBlock Text="" Foreground="#CCD5D7" FontSize="12" Margin="6,0,0,0"/>
                         </ToggleButton>
-
-
                         <ComboBox
     Grid.Column="2"
                             IsEnabled="{Binding IsWebcamEnabled}" IsHitTestVisible="{Binding IsEditEnabled}"
@@ -287,11 +424,9 @@ Visibility="{Binding IsWebcamEnabled,
     Foreground="#CCD5D7"
     IsEditable="False"
     MaxDropDownHeight="260">
-
                             <ComboBox.Template>
                                 <ControlTemplate TargetType="ComboBox">
                                     <Grid SnapsToDevicePixels="True">
-
                                         <ToggleButton x:Name="PART_DropDownToggle"
                               IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
                               Focusable="False" Foreground="#CCD5D7"
@@ -316,7 +451,6 @@ Visibility="{Binding IsWebcamEnabled,
                                                                 <ColumnDefinition/>
                                                                 <ColumnDefinition Width="18"/>
                                                             </Grid.ColumnDefinitions>
-
                                                             <ContentPresenter
                                         Margin="0"
                                         VerticalAlignment="Center"
@@ -324,7 +458,6 @@ Visibility="{Binding IsWebcamEnabled,
                                         Content="{Binding SelectionBoxItem, RelativeSource={RelativeSource AncestorType=ComboBox}}"
                                         ContentTemplate="{Binding SelectionBoxItemTemplate, RelativeSource={RelativeSource AncestorType=ComboBox}}"
                                         ContentTemplateSelector="{Binding ItemTemplateSelector, RelativeSource={RelativeSource AncestorType=ComboBox}}"/>
-
                                                             <Path x:Name="Arrow"
                                           Grid.Column="1"
                                           HorizontalAlignment="Center"
@@ -349,7 +482,6 @@ Visibility="{Binding IsWebcamEnabled,
                                                 </ControlTemplate>
                                             </ToggleButton.Template>
                                         </ToggleButton>
-
                                         <Popup x:Name="PART_Popup"
                        Placement="Bottom"
                        AllowsTransparency="True"
@@ -370,7 +502,6 @@ Visibility="{Binding IsWebcamEnabled,
                                     </Grid>
                                 </ControlTemplate>
                             </ComboBox.Template>
-
                             <ComboBox.ItemContainerStyle>
                                 <Style TargetType="ComboBoxItem">
                                     <Setter Property="Foreground" Value="#CCD5D7"/>
@@ -390,21 +521,17 @@ Visibility="{Binding IsWebcamEnabled,
                                 </Style>
                             </ComboBox.ItemContainerStyle>
                         </ComboBox>
-
-
                     </Grid>
                 </Grid>
             </Border>
-
             <Border Grid.Column="2" IsEnabled="{Binding IsEditEnabled}" IsHitTestVisible="{Binding IsEditEnabled}"
-     Margin="5,0,0,0"
+     Margin="05,0,0,0"
      CornerRadius="8"
      BorderBrush="#2A2F33"
      BorderThickness="1"
      Background="#232629"
      Padding="8">
                 <StackPanel VerticalAlignment="Center" >
-
                     <StackPanel Margin="0 0 0 0">
                         <DockPanel Margin="0,0,0,8">
                             <Image Source="{Binding MicrophoneIcon}"
@@ -415,14 +542,12 @@ Visibility="{Binding IsWebcamEnabled,
                      Height="22"
                      />
                         </DockPanel>
-
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="8"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-
                             <ToggleButton Grid.Column="0" x:Name="tglMicrophone" IsChecked="{Binding IsMicrophoneEnabled, Mode=TwoWay}" IsEnabled="{Binding IsEditEnabled}"
                            Style="{StaticResource MaterialDesignSwitchToggleButton}"
                            VerticalAlignment="Center"
@@ -432,7 +557,6 @@ Visibility="{Binding IsWebcamEnabled,
                             FontSize="12"
                             Margin="6,0,0,0"/>
                             </ToggleButton>
-
                             <ComboBox
     Grid.Column="2"
                                 IsEnabled="{Binding IsMicrophoneEnabled}" IsHitTestVisible="{Binding IsEditEnabled}"
@@ -446,7 +570,6 @@ Visibility="{Binding IsWebcamEnabled,
     Foreground="#CCD5D7"
     IsEditable="False"
     MaxDropDownHeight="260">
-
                                 <ComboBox.Template>
                                     <ControlTemplate TargetType="ComboBox">
                                         <Grid SnapsToDevicePixels="True">
@@ -474,7 +597,6 @@ Visibility="{Binding IsWebcamEnabled,
                                                                     <ColumnDefinition/>
                                                                     <ColumnDefinition Width="18"/>
                                                                 </Grid.ColumnDefinitions>
-
                                                                 <ContentPresenter
                                         Margin="0"
                                         VerticalAlignment="Center"
@@ -482,7 +604,6 @@ Visibility="{Binding IsWebcamEnabled,
                                         Content="{Binding SelectionBoxItem, RelativeSource={RelativeSource AncestorType=ComboBox}}"
                                         ContentTemplate="{Binding SelectionBoxItemTemplate, RelativeSource={RelativeSource AncestorType=ComboBox}}"
                                         ContentTemplateSelector="{Binding ItemTemplateSelector, RelativeSource={RelativeSource AncestorType=ComboBox}}"/>
-
                                                                 <Path x:Name="Arrow"
                                           Grid.Column="1"
                                           HorizontalAlignment="Center"
@@ -507,7 +628,6 @@ Visibility="{Binding IsWebcamEnabled,
                                                     </ControlTemplate>
                                                 </ToggleButton.Template>
                                             </ToggleButton>
-
                                             <Popup x:Name="PART_Popup"
                        Placement="Bottom"
                        AllowsTransparency="True"
@@ -528,7 +648,6 @@ Visibility="{Binding IsWebcamEnabled,
                                         </Grid>
                                     </ControlTemplate>
                                 </ComboBox.Template>
-
                                 <ComboBox.ItemContainerStyle>
                                     <Style TargetType="ComboBoxItem">
                                         <Setter Property="Foreground" Value="#CCD5D7"/>
@@ -551,10 +670,8 @@ Visibility="{Binding IsWebcamEnabled,
                                     </Style>
                                 </ComboBox.ItemContainerStyle>
                             </ComboBox>
-
                         </Grid>
                     </StackPanel>
-
                     <StackPanel Margin="0 15 0 15">
                         <Border BorderThickness="0,0,0,1" BorderBrush="#708089" />
                     </StackPanel>
@@ -568,7 +685,6 @@ Visibility="{Binding IsWebcamEnabled,
                      Height="22"
                      />
                         </DockPanel>
-
                         <WrapPanel VerticalAlignment="Center">
                             <ToggleButton Style="{StaticResource MaterialDesignSwitchToggleButton}" IsEnabled="{Binding IsEditEnabled}"
                             x:Name="tglSystemAudio" IsChecked="{Binding IsSystemAudioEnabled, Mode=TwoWay}"
@@ -586,17 +702,14 @@ Visibility="{Binding IsWebcamEnabled,
                                 VerticalAlignment="Center"/>
                         </WrapPanel>
                     </StackPanel>
-
                 </StackPanel>
             </Border>
-
             <Border Grid.Column="3" IsEnabled="{Binding IsEditEnabled}" IsHitTestVisible="{Binding IsEditEnabled}"
-     Margin="5 0 0 0"
+     Margin="-9 0 0 0"
      CornerRadius="8"
      BorderBrush="#2A2F33"
      BorderThickness="1"
      Background="#232629"
-                    
      Padding="8"
      HorizontalAlignment="Center"
      VerticalAlignment="Center">
@@ -607,7 +720,6 @@ Visibility="{Binding IsWebcamEnabled,
                     <StackPanel>
                         <Image Source="/Assets/Images/rec-icon.png" Visibility="{Binding IsRecButtonVisible, Converter={StaticResource BoolToVis}}"
             Stretch="Uniform"/>
-
                         <TextBlock x:Name="txtCountdown" Visibility="{Binding IsCountdownVisible, Converter={StaticResource BoolToVis}}"
            Text="{Binding CountdownText}"
            FontFamily="Arial"
@@ -618,34 +730,26 @@ Visibility="{Binding IsWebcamEnabled,
            VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
-                
             </Border>
-
         </Grid>
-
-        <Grid x:Name="GridRecord" Visibility="{Binding IsRecordingPanelVisible, Converter={StaticResource BoolToVis}}" Background="#1C1F21" IsEnabled="{Binding IsEditEnabled}"> 
+        <Grid Grid.Row="1" x:Name="GridRecord" Visibility="{Binding IsRecordingPanelVisible, Converter={StaticResource BoolToVis}}" Background="#1C1F21" IsEnabled="{Binding IsEditEnabled}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="120" />
                 <ColumnDefinition Width="120" />
-
             </Grid.ColumnDefinitions>
-
             <Grid Grid.Column="0" Margin="20">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="40" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
-
                 <StackPanel Grid.Row="0" Background="#2E3337">
                     <TextBlock Text="Duration Recording" FontFamily="Arial" FontSize="20" Foreground="#CCD5D7" HorizontalAlignment="Center" Margin="0 6 0 0" />
                 </StackPanel>
-
                 <StackPanel Grid.Row="1" Background="#232629">
                     <TextBlock x:Name="txtRecTimer" Text="{Binding TextRecTimer, Mode=TwoWay}" Foreground="#CCD5D7" FontFamily="Arial" FontWeight="Bold" FontSize="44" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0 32 0 0"/>
                 </StackPanel>
             </Grid>
-
             <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <Button Background="Transparent" BorderThickness="0" Cursor="Hand" Width="120" Height="120" Command="{Binding PauseRecordingCommand}">
                     <StackPanel>
@@ -654,7 +758,6 @@ Visibility="{Binding IsWebcamEnabled,
                     </StackPanel>
                 </Button>
             </StackPanel>
-
             <StackPanel Grid.Column="2" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <Button Background="Transparent" BorderThickness="0" Cursor="Hand" Width="120" Height="120" Command="{Binding StopRecordingCommand}">
                     <StackPanel>
@@ -663,8 +766,6 @@ Visibility="{Binding IsWebcamEnabled,
                     </StackPanel>
                 </Button>
             </StackPanel>
-
         </Grid>
-
     </Grid>
 </Window>

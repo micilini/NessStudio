@@ -12,20 +12,18 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
+using NessStudio.ViewModel.Helpers;
 
 namespace NessStudio.ViewModel
 {
     public class HomeScreenWindowVM : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler? PropertyChanged;
-
         private void OnPropertyChanged(string propertyName)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
-
         public HomeScreenWindow HomeScreenWindow { get; set; }
-
         private object headerContent;
         public object HeaderContent
         {
@@ -36,7 +34,6 @@ namespace NessStudio.ViewModel
                 OnPropertyChanged("HeaderContent");
             }
         }
-
         private object menuContent;
         public object MenuContent
         {
@@ -47,7 +44,6 @@ namespace NessStudio.ViewModel
                 OnPropertyChanged("MenuContent");
             }
         }
-
         private object projectsContent;
         public object ProjectsContent
         {
@@ -61,17 +57,13 @@ namespace NessStudio.ViewModel
         public HomeScreenWindowVM(HomeScreenWindow homeScreen)
         {
             HomeScreenWindow = homeScreen;
-
             headerContent = new HeaderControl(this);
             menuContent = new MenuControl(this);
             projectsContent = new RecentProjectsControl(this);
-
         }
-
         public void HandleWindowAction(WindowAction action)
         {
             if (HomeScreenWindow == null) return;
-
             switch (action)
             {
                 case WindowAction.Minimize:
@@ -85,31 +77,25 @@ namespace NessStudio.ViewModel
                     break;
             }
         }
-
         public void HandleMenuAction(MenuAction action)
         {
             if (HomeScreenWindow == null) return;
-
             switch (action)
             {
                 case MenuAction.NewProject:
                     ShowNotAvaiableMessage();
                     break;
-
                 case MenuAction.OpenProject:
                     ShowNotAvaiableMessage();
                     break;
-
                 case MenuAction.StartRecording:
                     OpenRecordingScreen();
                     break;
-
                 case MenuAction.AboutApplication:
                     ShowAboutWindow(); 
                     break;
             }
         }
-
         private void ShowNotAvaiableMessage()
         {
             MessageBox.Show(
@@ -118,28 +104,25 @@ namespace NessStudio.ViewModel
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning
             );
-
         }
-
         private void ShowAboutWindow()
         {
             var owner = Application.Current?.Windows
                 .OfType<Window>()
                 .FirstOrDefault(w => w.IsActive) ?? Application.Current?.MainWindow;
-
             var about = new AboutScreenWindow
             {
                 WindowStartupLocation = WindowStartupLocation.CenterOwner
             };
-
             if (owner != null && !ReferenceEquals(owner, about))
                 about.Owner = owner;
-
             about.ShowDialog();
         }
 
         private void OpenRecordingScreen()
         {
+            RecordingPerfProbe.Mark("home-before-open-recording-window");
+
             HomeScreenWindow.Hide();
 
             var recording = new RecordingScreenWindow
@@ -149,17 +132,14 @@ namespace NessStudio.ViewModel
             };
 
             recording.Show();
-
             if (Application.Current.MainWindow == HomeScreenWindow)
                 Application.Current.MainWindow = recording;
-
             HomeScreenWindow.Dispatcher.BeginInvoke(new Action(() =>
             {
                 recording.Owner = null;
                 HomeScreenWindow.Close();
             }));
         }
-
         private void MaximizeOrRestaureBounds()
         {
             if (HomeScreenWindow.WindowState == System.Windows.WindowState.Maximized)
@@ -172,6 +152,5 @@ namespace NessStudio.ViewModel
                 HomeScreenWindow.WindowState = System.Windows.WindowState.Maximized;
             }
         }
-
     }
-}
+}

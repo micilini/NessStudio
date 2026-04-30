@@ -7,7 +7,6 @@
              mc:Ignorable="d"
              xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
              d:DesignHeight="706" d:DesignWidth="774">
-
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Style="{StaticResource MaterialDesignScrollViewer}" Foreground="White" >
         <Grid Margin="25 40">
             <Grid.RowDefinitions>
@@ -23,23 +22,20 @@
                     <ProgressBar IsIndeterminate="True" Width="140" Height="6" BorderBrush="Transparent" />
                     <TextBlock Text="Loading Projects"  Margin="0,12,0,0" Foreground="#708089" FontSize="16" HorizontalAlignment="Center"/>
                 </StackPanel>
-
                 <StackPanel Visibility="{Binding IsNoneProjectBlockVisible, Converter={StaticResource BoolToVis}, Mode=OneWay}" Margin="0 40 0 0">
                     <Image RenderOptions.BitmapScalingMode="HighQuality" Source="/Assets/Images/sad-icon.png" VerticalAlignment="Center" Margin="0 0 20 0" Width="180" Height="180" Opacity="0.4" />
                     <TextBlock HorizontalAlignment="Center" FontSize="18" FontFamily="Arial" FontWeight="Bold" Margin="-10 9 0 0" TextWrapping="Wrap" Foreground="#CCD5D7">Looks like you haven’t created any recordings yet.</TextBlock>
                 </StackPanel>
-
                 <ScrollViewer Visibility="{Binding IsProjectBlockVisible, Converter={StaticResource BoolToVis}, Mode=OneWay}"
                       VerticalScrollBarVisibility="Auto" HorizontalAlignment="Left" VerticalAlignment="Top">
                     <StackPanel>
                         <WrapPanel x:Name="ProjectsWrapPanel" Margin="8" HorizontalAlignment="Left" VerticalAlignment="Top"/>
                     </StackPanel>
                 </ScrollViewer>
-                
                 <StackPanel Visibility="{Binding IsProjectBlockVisible, Converter={StaticResource BoolToVis}, Mode=OneWay}">
                     <Button Command="{Binding OpenFolderRecordingCommand}" Content="More Recordings" FontFamily="Arial" FontSize="18" Background="red" Foreground="white" Width="220" Height="40" BorderBrush="Transparent" Margin="0 50 0 0" />
                 </StackPanel>
             </StackPanel>
         </Grid>
     </ScrollViewer>
-</UserControl>
+</UserControl>

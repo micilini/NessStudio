@@ -13,30 +13,22 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
-
-
 namespace NessStudio.View.SplashScreen
 {
     public partial class SplashScreenWindow : Window
     {
-
         private readonly SplashScreenWindowVM viewModel;
-
         public SplashScreenWindow()
         {
             InitializeComponent();
-
             viewModel = new SplashScreenWindowVM();
             DataContext = viewModel;
-
             viewModel.OnLoadingComplete += OnLoadingComplete;
         }
-
         private async void Window_ContentRendered(object sender, EventArgs e)
         {
             await viewModel.InitializeAsync();
         }
-
         private void OnLoadingComplete()
         {
             Application.Current.Dispatcher.Invoke(() =>
@@ -46,6 +38,5 @@ namespace NessStudio.View.SplashScreen
                 Close();
             });
         }
-
     }
-}
+}

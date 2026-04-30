@@ -18,23 +18,19 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 using NessStudio.ViewModel.Helpers;
-
 namespace NessStudio.Components.RecentProjects
 {
     public partial class RecentProjectsControl : UserControl
     {
         public HomeScreenWindowVM HomeScreenWindowVM { get; set; }
         public RecentProjectsControlVM RecentProjectsControlVM { get; set; }
-
         public RecentProjectsControl(HomeScreenWindowVM HS)
         {
             InitializeComponent();
             HomeScreenWindowVM = HS;
-
             RecentProjectsControlVM = new RecentProjectsControlVM(HS, this);
             this.DataContext = RecentProjectsControlVM;
         }
-
         public void RenderProjects(IEnumerable<ProjectsModel> items, bool clearFirst = true)
         {
             if (!Dispatcher.CheckAccess())
@@ -42,27 +38,22 @@ namespace NessStudio.Components.RecentProjects
                 Dispatcher.Invoke(() => RenderProjects(items, clearFirst));
                 return;
             }
-
             if (clearFirst)
                 ProjectsWrapPanel.Children.Clear();
-
             foreach (var model in items)
                 ProjectsWrapPanel.Children.Add(BuildProjectCard(model));
         }
-
         private UIElement BuildProjectCard(ProjectsModel model, bool deferImage = false)
         {
             Brush borderBrush = (Brush)new BrushConverter().ConvertFromString("#2A2F33");
             Brush cardBg = (Brush)new BrushConverter().ConvertFromString("#232629");
             Brush thumbBg = (Brush)new BrushConverter().ConvertFromString("#1C1F21");
             Brush fg = (Brush)new BrushConverter().ConvertFromString("#708089");
-
             const int cardWidth = 225;
             const int cardHeight = 215;
             const int cardPadding = 9;
             const int thumbHeight = 112;
             const int cardMargin = 6;
-
             var card = new Border
             {
                 CornerRadius = new CornerRadius(8),
@@ -75,9 +66,7 @@ namespace NessStudio.Components.RecentProjects
                 Margin = new Thickness(cardMargin),
                 Tag = model.ProjectFolderPath
             };
-
             var root = new StackPanel();
-
             var thumbBorder = new Border
             {
                 Background = thumbBg,
@@ -86,7 +75,6 @@ namespace NessStudio.Components.RecentProjects
                 CornerRadius = new CornerRadius(8),
                 ClipToBounds = true
             };
-
             var thumbButton = new Button
             {
                 Background = Brushes.Transparent,
@@ -100,12 +88,10 @@ namespace NessStudio.Components.RecentProjects
                 VerticalContentAlignment = VerticalAlignment.Stretch
             };
             thumbButton.Click += (s, e) => RecentProjectsControlVM.OpenInExplorer(model.ProjectFolderPath);
-
             BindingOperations.SetBinding(thumbButton, FrameworkElement.HeightProperty,
                 new Binding("ActualHeight") { Source = thumbBorder });
             BindingOperations.SetBinding(thumbButton, FrameworkElement.WidthProperty,
                 new Binding("ActualWidth") { Source = thumbBorder });
-
             var img = new Image
             {
                 Stretch = Stretch.UniformToFill,
@@ -116,9 +102,7 @@ namespace NessStudio.Components.RecentProjects
                 new Binding("ActualHeight") { Source = thumbBorder });
             BindingOperations.SetBinding(img, FrameworkElement.WidthProperty,
                 new Binding("ActualWidth") { Source = thumbBorder });
-
             const string FallbackPackUri = "pack://application:,,,/Assets/Images/system-audio-icon.png";
-
             try
             {
                 if (!string.IsNullOrWhiteSpace(model.ThumbnailPath) && File.Exists(model.ThumbnailPath))
@@ -137,16 +121,13 @@ namespace NessStudio.Components.RecentProjects
                     img.HorizontalAlignment = HorizontalAlignment.Center;
                     img.VerticalAlignment = VerticalAlignment.Center;
                 }
-
             }
             catch
             {
                 try { img.Source = LoadBitmapHelper.LoadBitmapFromPack(FallbackPackUri); } catch {  }
             }
-
             thumbButton.Content = img;
             thumbBorder.Child = thumbButton;
-
             if (!string.IsNullOrWhiteSpace(model.ThumbnailPath) && File.Exists(model.ThumbnailPath))
             {
                 _ = Task.Run(() =>
@@ -158,7 +139,6 @@ namespace NessStudio.Components.RecentProjects
                             var ms = new MemoryStream();
                             fs.CopyTo(ms);
                             ms.Position = 0;
-
                             var bmp = new BitmapImage();
                             bmp.BeginInit();
                             bmp.CacheOption = BitmapCacheOption.OnLoad;
@@ -193,10 +173,8 @@ namespace NessStudio.Components.RecentProjects
                     }
                 }, TaskScheduler.FromCurrentSynchronizationContext());
             }
-
             thumbButton.Content = img;
             thumbBorder.Child = thumbButton;
-
             var titleBox = new TextBox
             {
                 Margin = new Thickness(0, 8, 0, 0),
@@ -213,7 +191,6 @@ namespace NessStudio.Components.RecentProjects
                 Cursor = Cursors.IBeam,
                 TextWrapping = TextWrapping.Wrap
             };
-
             var sizeBox = new TextBox
             {
                 Margin = new Thickness(0, 8, 0, 0),
@@ -230,7 +207,6 @@ namespace NessStudio.Components.RecentProjects
                 Cursor = Cursors.IBeam,
                 TextWrapping = TextWrapping.Wrap
             };
-
             var dateBox = new TextBox
             {
                 Margin = new Thickness(0, 8, 0, 0),
@@ -248,7 +224,6 @@ namespace NessStudio.Components.RecentProjects
                 TextWrapping = TextWrapping.Wrap,
                 TextAlignment = TextAlignment.Left
             };
-
             TextFieldAssist.SetDecorationVisibility(titleBox, Visibility.Collapsed);
             TextFieldAssist.SetUnderlineBrush(titleBox, Brushes.Transparent);
             TextFieldAssist.SetDecorationVisibility(sizeBox, Visibility.Collapsed);
@@ -258,14 +233,11 @@ namespace NessStudio.Components.RecentProjects
             titleBox.FocusVisualStyle = null;
             sizeBox.FocusVisualStyle = null;
             dateBox.FocusVisualStyle = null;
-
             var bottomGrid = new Grid { Margin = new Thickness(0, 8, 0, 0) };
             bottomGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             bottomGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
             Grid.SetColumn(dateBox, 0);
             bottomGrid.Children.Add(dateBox);
-
             var deleteBtn = new Button
             {
                 Width = 28,
@@ -279,25 +251,19 @@ namespace NessStudio.Components.RecentProjects
                 Tag = model,
                 ToolTip = "Delete this recording"
             };
-
             var imgDel = new Image { Width = 20, Height = 20, Stretch = Stretch.Uniform };
             imgDel.Source = new BitmapImage(new Uri("pack://application:,,,/Assets/Images/delete-icon.png", UriKind.Absolute));
             deleteBtn.Content = imgDel;
             deleteBtn.Click += OnDeleteClicked;
-
             Grid.SetColumn(deleteBtn, 1);
             bottomGrid.Children.Add(deleteBtn);
-
             root.Children.Add(thumbBorder);
             root.Children.Add(titleBox);
             root.Children.Add(sizeBox);
             root.Children.Add(bottomGrid);
-
             card.Child = root;
             return card;
         }
-
-
         public async Task RenderProjectsAsync(IEnumerable<ProjectsModel> items, bool clearFirst = true)
         {
             if (!Dispatcher.CheckAccess())
@@ -305,18 +271,14 @@ namespace NessStudio.Components.RecentProjects
                 await Dispatcher.InvokeAsync(() => RenderProjectsAsync(items, clearFirst));
                 return;
             }
-
             if (clearFirst)
                 ProjectsWrapPanel.Children.Clear();
-
             var sw = System.Diagnostics.Stopwatch.StartNew();
             int batchMs = 16;
-
             foreach (var model in items)
             {
                 var card = BuildProjectCard(model, deferImage: true);
                 ProjectsWrapPanel.Children.Add(card);
-
                 if (sw.ElapsedMilliseconds > batchMs)
                 {
                     sw.Restart();
@@ -324,7 +286,6 @@ namespace NessStudio.Components.RecentProjects
                 }
             }
         }
-
         private async void OnDeleteClicked(object sender, RoutedEventArgs e)
         {
             if (sender is Button btn && btn.Tag is ProjectsModel model)
@@ -334,20 +295,15 @@ namespace NessStudio.Components.RecentProjects
                     "Delete Recording",
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Warning);
-
                 if (result != MessageBoxResult.Yes)
                     return;
-
                 btn.IsEnabled = false;
-
                 bool ok = await RecentProjectsControlVM.DeleteProjectAsync(model);
-
                 if (ok)
                 {
                     var card = RecentProjectsControlVM.FindAncestor<Border>(btn);
                     if (card != null && ProjectsWrapPanel.Children.Contains(card))
                         ProjectsWrapPanel.Children.Remove(card);
-
                     if (ProjectsWrapPanel.Children.Count == 0)
                     {
                         RecentProjectsControlVM.IsNoneProjectBlockVisible = true;
@@ -363,6 +319,5 @@ namespace NessStudio.Components.RecentProjects
                 }
             }
         }
-
     }
-}
+}

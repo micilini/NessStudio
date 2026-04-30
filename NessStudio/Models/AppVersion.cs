@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-
 namespace NessStudio.Models
 {
     [Table("AppVersion")]
@@ -12,13 +11,9 @@ namespace NessStudio.Models
     {
         [PrimaryKey, AutoIncrement]
         public int Id { get; set; }
-
         public double Version { get; set; }
-
         public DateTime CreatedAt { get; set; }
-
         public DateTime UpdatedAt { get; set; }
-
         public AppVersion()
         {
             Version = 1.0;
@@ -26,4 +21,4 @@ namespace NessStudio.Models
             UpdatedAt = DateTime.Now;
         }
     }
-}
+}

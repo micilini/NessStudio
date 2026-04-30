@@ -13,7 +13,6 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
-
 namespace NessStudio.Components.Header
 {
     public partial class HeaderControl : UserControl
@@ -22,9 +21,8 @@ namespace NessStudio.Components.Header
         public HeaderControl(HomeScreenWindowVM HS)
         {
             InitializeComponent();
-
             HomeScreenWindowVM = HS;
             this.DataContext = new HeaderControlVM(HS);
         }
     }
-}
+}
