@@ -115,14 +115,11 @@ namespace NessStudio.ViewModel.Helpers
         {
             DebugLog.Write("[SystemLoopback] Stop begin");
 
-            
-            
-            
-            
-            
-
             try { tick?.Stop(); } catch { }
             try { tick?.Dispose(); } catch { }
+
+            try { writer?.Flush(); } catch { }
+            try { writer?.Dispose(); } catch { }
 
             try
             {
@@ -133,12 +130,7 @@ namespace NessStudio.ViewModel.Helpers
                 DebugLog.Write("[SystemLoopback] StopRecording warning:\n" + ex);
             }
 
-            
-            
-            try { writer?.Flush(); } catch { }
-            try { writer?.Dispose(); } catch { }
-
-            try { cap?.Dispose(); } catch { }
+            try { System.Threading.Thread.Sleep(80); } catch { }
 
             DebugLog.Write("[SystemLoopback] Stop end");
         }
