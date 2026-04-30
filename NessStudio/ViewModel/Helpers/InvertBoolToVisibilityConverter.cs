@@ -6,7 +6,6 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Data;
-
 namespace NessStudio.ViewModel.Helpers
 {
     public class InvertBoolToVisibilityConverter : IValueConverter
@@ -17,7 +16,6 @@ namespace NessStudio.ViewModel.Helpers
                 return b ? Visibility.Collapsed : Visibility.Visible;
             return Visibility.Visible;
         }
-
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         {
             if (value is Visibility v)
@@ -25,4 +23,4 @@ namespace NessStudio.ViewModel.Helpers
             return true;
         }
     }
-}
+}

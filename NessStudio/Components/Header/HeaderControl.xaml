@@ -35,7 +35,6 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
-
             <Style.Triggers>
                 <Trigger Property="IsPressed" Value="True">
                     <Trigger.EnterActions>
@@ -71,25 +70,20 @@
             <ColumnDefinition Width="300" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
-
         <WrapPanel VerticalAlignment="Center" Margin="15 0 0 0" Grid.Column="0">
             <Image RenderOptions.BitmapScalingMode="HighQuality" Source="/Assets/Images/logo-nessstudio.png" Width="35" Margin="0 0 0 0"></Image>
             <TextBlock Text="NESS STUDIO" FontSize="22" FontWeight="Bold" FontFamily="Arial" Foreground="#e74c3c" Margin="6 6 0 0"></TextBlock>
         </WrapPanel>
-
         <WrapPanel VerticalAlignment="Center" Grid.Column="1" HorizontalAlignment="Right">
-
             <Button Style="{StaticResource IconButtonClickScale}" shell:WindowChrome.IsHitTestVisibleInChrome="True" Command="{Binding MinimizeApplicationCommand}" Padding="0" Background="{x:Null}" BorderBrush="{x:Null}" Foreground="{DynamicResource PrimaryHueLightForegroundBrush}" Width="20" Height="20" Margin="0 0 20 0">
                 <Image RenderOptions.BitmapScalingMode="HighQuality" Source="/Assets/Images/minimize-icon-white.png" Width="20" ></Image>
             </Button>
-
             <Button Style="{StaticResource IconButtonClickScale}" shell:WindowChrome.IsHitTestVisibleInChrome="True" Command="{Binding MaximizeApplicationCommand}" Padding="0" Background="{x:Null}" BorderBrush="{x:Null}" Foreground="{DynamicResource PrimaryHueLightForegroundBrush}" Width="20" Height="20" Margin="0 0 20 0">
                 <Image RenderOptions.BitmapScalingMode="HighQuality" Source="{Binding MaximizedIcon}" Width="20" ></Image>
             </Button>
-
             <Button Style="{StaticResource IconButtonClickScale}" shell:WindowChrome.IsHitTestVisibleInChrome="True" Command="{Binding CloseApplicationCommand}" Padding="0" Background="{x:Null}" BorderBrush="{x:Null}" Foreground="{DynamicResource PrimaryHueLightForegroundBrush}" Width="20" Height="20" Margin="0 0 20 0">
                 <Image RenderOptions.BitmapScalingMode="HighQuality" Source="/Assets/Images/close-icon-white.png" Width="20"></Image>
             </Button>
         </WrapPanel>
     </Grid>
-</UserControl>
+</UserControl>

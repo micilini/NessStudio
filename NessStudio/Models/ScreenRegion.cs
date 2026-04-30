@@ -5,7 +5,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-
 namespace NessStudio.Models
 {
     public sealed class ScreenRegion
@@ -14,11 +13,9 @@ namespace NessStudio.Models
         public System.Drawing.Rectangle? CropGdi { get; }
         public bool IsCropped => CropGdi.HasValue;
         public bool ShouldCapture => IsCropped || SelectedScreen != null;
-
         public ScreenRegion(Screen selectedScreen, System.Windows.Rect? cropPx)
         {
             SelectedScreen = selectedScreen;
-
             if (cropPx.HasValue)
             {
                 var r = cropPx.Value;
@@ -31,4 +28,4 @@ namespace NessStudio.Models
             }
         }
     }
-}
+}

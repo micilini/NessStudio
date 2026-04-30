@@ -13,7 +13,6 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
-
 namespace NessStudio.Components.Menu
 {
     public partial class MenuControl : UserControl
@@ -23,8 +22,7 @@ namespace NessStudio.Components.Menu
         {
             InitializeComponent();
             HomeScreenWindowVM = HS;
-
             this.DataContext = new MenuControlVM(HS);
         }
     }
-}
+}

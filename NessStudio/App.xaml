@@ -15,4 +15,4 @@
             <helpers:InvertBoolToVisibilityConverter x:Key="InvertBoolToVisibility"/>
         </ResourceDictionary>
     </Application.Resources>
-</Application>
+</Application>

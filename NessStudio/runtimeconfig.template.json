@@ -1,0 +1,6 @@
+{
+  "configProperties": {
+    "System.Runtime.InteropServices.EnableCOMHosting": true,
+    "System.Runtime.CompilerServices.RuntimeHelpers.AllowCorruptedStateExceptions": true
+  }
+}

@@ -4,7 +4,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-
 namespace NessStudio.Models
 {
     public sealed class RecordingDeviceSelection
@@ -13,7 +12,6 @@ namespace NessStudio.Models
         public string MicDeviceId { get; }
         public string LoopbackDeviceId { get; }
         public string DisplayFriendlyName { get; }
-
         public RecordingDeviceSelection(
             string webcamName,
             string micDeviceId,
@@ -25,13 +23,11 @@ namespace NessStudio.Models
             LoopbackDeviceId = Normalize(loopbackDeviceId);
             DisplayFriendlyName = displayFriendlyName?.Trim();
         }
-
         public bool CaptureWebcam => !string.IsNullOrWhiteSpace(WebcamName);
         public bool CaptureMic => !string.IsNullOrWhiteSpace(MicDeviceId);
         public bool CaptureSystem => !string.IsNullOrWhiteSpace(LoopbackDeviceId);
         public bool AnyVideo => CaptureWebcam;
         public bool AnyAudio => CaptureMic || CaptureSystem;
-
         public NessStudio.Models.RecordingTargets BuildTargets(Screen screen)
             => new NessStudio.Models.RecordingTargets(
                 screen,
@@ -39,7 +35,6 @@ namespace NessStudio.Models
                 MicDeviceId,
                 LoopbackDeviceId
             );
-
         public bool IsValid(out string message)
         {
             if (!AnyVideo && !AnyAudio)
@@ -50,7 +45,6 @@ namespace NessStudio.Models
             message = null;
             return true;
         }
-
         public override string ToString()
         {
             var sb = new StringBuilder();
@@ -62,8 +56,7 @@ namespace NessStudio.Models
                 sb.Append($"Display=\"{DisplayFriendlyName}\"");
             return sb.ToString().TrimEnd();
         }
-
         private static string Normalize(string s)
             => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
     }
-}
+}

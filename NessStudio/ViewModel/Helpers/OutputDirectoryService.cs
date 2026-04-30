@@ -5,7 +5,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-
 namespace NessStudio.ViewModel.Helpers
 {
     public static class OutputDirectoryService
@@ -18,7 +17,6 @@ namespace NessStudio.ViewModel.Helpers
             Directory.CreateDirectory(root);
             return root;
         }
-
         public static string EnsureBaseDir(string baseDir)
         {
             if (string.IsNullOrWhiteSpace(baseDir))
@@ -26,7 +24,6 @@ namespace NessStudio.ViewModel.Helpers
             Directory.CreateDirectory(baseDir);
             return baseDir;
         }
-
         public static RecordingOutputPaths BuildPaths(string root = null, DateTime? timestamp = null)
         {
             root ??= EnsureDefaultRoot();
@@ -36,4 +33,4 @@ namespace NessStudio.ViewModel.Helpers
             return new RecordingOutputPaths(sessionDir);
         }
     }
-}
+}

@@ -15,7 +15,6 @@ using System.Drawing.Imaging;
 using OpenCvSharp;
 using OpenCvSharp.WpfExtensions;
 using NessStudio.ViewModel;
-
 namespace NessStudio.View.RecordingScreen
 {
     public partial class RecordingScreenWindow
@@ -25,6 +24,5 @@ namespace NessStudio.View.RecordingScreen
             InitializeComponent();
             this.DataContext = new RecordingScreenWindowVM(this);
         }
-
     }
 }

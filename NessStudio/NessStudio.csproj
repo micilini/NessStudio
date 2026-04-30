@@ -1,14 +1,15 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+	<TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <ApplicationIcon>logo-nessstudio.ico</ApplicationIcon>
+	<ApplicationIcon>logo-nessstudio.ico</ApplicationIcon>
+	<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+	<SupportedOSPlatformVersion>10.0.17134.0</SupportedOSPlatformVersion>
+	<GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
   </PropertyGroup>
-
   <ItemGroup>
     <None Remove="Assets\Images\close-icon-white.png" />
     <None Remove="Assets\Images\delete-icon.png" />
@@ -33,11 +34,9 @@
     <None Remove="Assets\Images\system-audio-icon.png" />
     <None Remove="Assets\Images\windowed-icon.png" />
   </ItemGroup>
-
   <ItemGroup>
     <Content Include="logo-nessstudio.ico" />
   </ItemGroup>
-
   <ItemGroup>
     <PackageReference Include="DirectShowLib" Version="1.0.0" />
     <PackageReference Include="MaterialDesignColors" Version="5.2.1" />
@@ -50,7 +49,6 @@
     <PackageReference Include="sqlite-net-pcl" Version="1.9.172" />
     <PackageReference Include="sqlite-net-sqlcipher" Version="1.9.172" />
   </ItemGroup>
-
   <ItemGroup>
     <Resource Include="Assets\Images\close-icon-black.png" />
     <Resource Include="Assets\Images\close-icon-white.png" />
@@ -77,20 +75,13 @@
     <Resource Include="Assets\Images\system-audio-icon.png" />
     <Resource Include="Assets\Images\windowed-icon.png" />
   </ItemGroup>
-
-  <ItemGroup>
-    <None Update="Modules\ffmpeg.exe">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-    <None Update="Modules\ffplay.exe">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-    <None Update="Modules\ffprobe.exe">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-    <None Update="Modules\info.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-
-</Project>
+	<ItemGroup>
+		<Folder Include="Native\WgcInteropBridge\" />
+	</ItemGroup>
+	<ItemGroup>
+		<Content Include="Native\NessMuxer\NessMuxer.dll">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+			<TargetPath>NessMuxer.dll</TargetPath>
+		</Content>
+	</ItemGroup>
+</Project>
