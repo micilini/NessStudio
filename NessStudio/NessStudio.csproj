@@ -29,6 +29,10 @@
     <None Remove="Assets\Images\rec-icon.png" />
     <None Remove="Assets\Images\record-icon.png" />
     <None Remove="Assets\Images\sad-icon.png" />
+    <None Remove="Assets\Images\screen-icon.png" />
+    <None Remove="Assets\Images\webcam-icon.png" />
+    <None Remove="Assets\Images\microphone-icon.png" />
+    <None Remove="Assets\Images\systemaudio-icon.png" />
     <None Remove="Assets\Images\stop-icon.png" />
     <None Remove="Assets\Images\system-audio-closed-icon.png" />
     <None Remove="Assets\Images\system-audio-icon.png" />
@@ -70,6 +74,10 @@
     <Resource Include="Assets\Images\rec-icon.png" />
     <Resource Include="Assets\Images\record-icon.png" />
     <Resource Include="Assets\Images\sad-icon.png" />
+    <Resource Include="Assets\Images\screen-icon.png" />
+    <Resource Include="Assets\Images\webcam-icon.png" />
+    <Resource Include="Assets\Images\microphone-icon.png" />
+    <Resource Include="Assets\Images\systemaudio-icon.png" />
     <Resource Include="Assets\Images\stop-icon.png" />
     <Resource Include="Assets\Images\system-audio-closed-icon.png" />
     <Resource Include="Assets\Images\system-audio-icon.png" />
@@ -77,11 +85,19 @@
   </ItemGroup>
 	<ItemGroup>
 		<Folder Include="Native\WgcInteropBridge\" />
+		<Folder Include="Native\FFmpeg\" />
 	</ItemGroup>
 	<ItemGroup>
 		<Content Include="Native\NessMuxer\NessMuxer.dll">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 			<TargetPath>NessMuxer.dll</TargetPath>
+		</Content>
+	</ItemGroup>
+
+	<ItemGroup>
+		<Content Include="Native\FFmpeg\ffmpeg.exe" Condition="Exists('Native\FFmpeg\ffmpeg.exe')">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<TargetPath>Native\FFmpeg\ffmpeg.exe</TargetPath>
 		</Content>
 	</ItemGroup>
 </Project>

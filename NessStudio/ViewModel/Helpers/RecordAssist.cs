@@ -31,6 +31,13 @@ namespace NessStudio.ViewModel.Helpers
         private DateTime _micPausedAt;
         private bool _micSessionOpen;
         private readonly RecordingRuntimeOptions _runtimeOptions;
+        private readonly Stopwatch _sessionClock = new Stopwatch();
+        private DateTimeOffset? _sessionStartedAtUtc;
+        private DateTimeOffset? _sessionStoppedAtUtc;
+        private long? _sessionDurationMs;
+        private List<SessionManifest.PauseInterval> _finalizedPauseIntervals = new List<SessionManifest.PauseInterval>();
+        private ScreenTrackSnapshot _finalizedScreenSnapshot;
+        private bool _tracksStoppedForFinalize;
 
         private sealed class ScreenTrackSnapshot
         {
@@ -54,6 +61,51 @@ namespace NessStudio.ViewModel.Helpers
             _targets = targets ?? throw new ArgumentNullException(nameof(targets));
             _runtimeOptions = runtimeOptions ?? new RecordingRuntimeOptions();
             _region = new ScreenRegion(targets.Screen, cropPx);
+        }
+
+        private void StartMasterSessionClock()
+        {
+            _sessionStartedAtUtc = DateTimeOffset.UtcNow;
+            _sessionStoppedAtUtc = null;
+            _sessionDurationMs = null;
+            _sessionClock.Restart();
+            DebugLog.Write($"[RecordAssist] master clock started | startedAt={_sessionStartedAtUtc:O}");
+        }
+
+        private void PauseMasterSessionClock()
+        {
+            if (_sessionClock.IsRunning)
+            {
+                _sessionClock.Stop();
+                DebugLog.Write($"[RecordAssist] master clock paused | elapsedMs={_sessionClock.ElapsedMilliseconds}");
+            }
+        }
+
+        private void ResumeMasterSessionClock()
+        {
+            if (_sessionStartedAtUtc.HasValue && !_sessionClock.IsRunning && !_sessionStoppedAtUtc.HasValue)
+            {
+                _sessionClock.Start();
+                DebugLog.Write($"[RecordAssist] master clock resumed | elapsedMs={_sessionClock.ElapsedMilliseconds}");
+            }
+        }
+
+        private void StopMasterSessionClock()
+        {
+            if (!_sessionStartedAtUtc.HasValue)
+                _sessionStartedAtUtc = DateTimeOffset.UtcNow;
+
+            if (!_sessionStoppedAtUtc.HasValue)
+                _sessionStoppedAtUtc = DateTimeOffset.UtcNow;
+
+            if (_sessionClock.IsRunning)
+                _sessionClock.Stop();
+
+            _sessionDurationMs = Math.Max(0, _sessionClock.ElapsedMilliseconds);
+
+            DebugLog.Write(
+                $"[RecordAssist] master clock stopped | " +
+                $"startedAt={_sessionStartedAtUtc:O} | stoppedAt={_sessionStoppedAtUtc:O} | durationMs={_sessionDurationMs}");
         }
 
         private bool ShouldCaptureScreen()
@@ -91,6 +143,11 @@ namespace NessStudio.ViewModel.Helpers
                 $"mic={!string.IsNullOrWhiteSpace(_targets.MicDeviceId)} | " +
                 $"system={!string.IsNullOrWhiteSpace(_targets.LoopbackDeviceId)}");
 
+            StartMasterSessionClock();
+            _tracksStoppedForFinalize = false;
+            _finalizedPauseIntervals = new List<SessionManifest.PauseInterval>();
+            _finalizedScreenSnapshot = null;
+
             _seg.Start();
 
             if (ShouldCaptureScreen())
@@ -104,6 +161,7 @@ namespace NessStudio.ViewModel.Helpers
                 catch (Exception ex)
                 {
                     DebugLog.Write("[RecordAssist] StartScreenSegment() ERROR:\n" + ex);
+                    StopMasterSessionClock();
                     _seg.TryStop();
                     throw new InvalidOperationException("Screen capture failed to start.", ex);
                 }
@@ -119,6 +177,7 @@ namespace NessStudio.ViewModel.Helpers
             {
                 DebugLog.Write("[RecordAssist] StartWebcamSegment() ERROR:\n" + ex);
                 try { StopScreenSegment(); } catch { }
+                StopMasterSessionClock();
                 _seg.TryStop();
                 throw new InvalidOperationException("Webcam capture failed to start.", ex);
             }
@@ -134,6 +193,7 @@ namespace NessStudio.ViewModel.Helpers
                 DebugLog.Write("[RecordAssist] StartMicSegment() ERROR:\n" + ex);
                 try { await StopWebcamSegmentAsync(); } catch { }
                 try { StopScreenSegment(); } catch { }
+                StopMasterSessionClock();
                 _seg.TryStop();
                 throw new InvalidOperationException("Microphone capture failed to start.", ex);
             }
@@ -150,6 +210,7 @@ namespace NessStudio.ViewModel.Helpers
                 try { StopMicSegment(); } catch { }
                 try { await StopWebcamSegmentAsync(); } catch { }
                 try { StopScreenSegment(); } catch { }
+                StopMasterSessionClock();
                 _seg.TryStop();
                 throw new InvalidOperationException("System audio capture failed to start.", ex);
             }
@@ -162,6 +223,7 @@ namespace NessStudio.ViewModel.Helpers
 
             DebugLog.Write("[RecordAssist] PauseAsync begin");
             _seg.TryPause();
+            PauseMasterSessionClock();
 
             if (ShouldCaptureScreen())
             {
@@ -226,6 +288,7 @@ namespace NessStudio.ViewModel.Helpers
             DebugLog.Write("[RecordAssist] ResumeAsync begin");
             RecordingPerfProbe.Mark("resume-begin", $"segment={_seg.SegmentIndex}");
             _seg.TryResume();
+            ResumeMasterSessionClock();
 
             if (ShouldCaptureScreen())
             {
@@ -261,21 +324,75 @@ namespace NessStudio.ViewModel.Helpers
 
         public async Task StopAsync()
         {
-            if (!_seg.IsRunning)
+            if (!_seg.IsRunning && _tracksStoppedForFinalize)
                 return;
 
-            _seg.TryStop();
+            DebugLog.Write("[RecordAssist] StopAsync begin | immediate final stop requested");
+            StopMasterSessionClock();
+            await StopActiveTracksForFinalizationAsync().ConfigureAwait(false);
+            DebugLog.Write("[RecordAssist] StopAsync end");
+        }
+
+        private async Task StopActiveTracksForFinalizationAsync()
+        {
+            if (_tracksStoppedForFinalize)
+                return;
+
+            _tracksStoppedForFinalize = true;
 
             if (ShouldCaptureScreen())
             {
-                StopScreenSegment();
-                try { _wgcScreen?.ReleaseSession(); } catch { }
-                _wgcScreen = null;
+                try
+                {
+                    StopScreenSegment();
+
+                    if (_wgcScreen != null)
+                    {
+                        _finalizedPauseIntervals = BuildPauseIntervals(_wgcScreen);
+                        _finalizedScreenSnapshot = CaptureScreenSnapshot(_wgcScreen);
+                    }
+
+                    _wgcScreen?.ReleaseSession();
+                    _wgcScreen = null;
+
+                    DebugLog.Write("[RecordAssist] StopActiveTracksForFinalizationAsync -> screen stopped/released");
+                }
+                catch (Exception ex)
+                {
+                    DebugLog.Write("[RecordAssist] StopActiveTracksForFinalizationAsync -> screen ERROR:\n" + ex);
+                }
             }
 
-            await StopWebcamSegmentAsync();
-            StopMicSegment();
-            StopLoopbackSegment();
+            try
+            {
+                await StopWebcamSegmentAsync(releaseSession: true).ConfigureAwait(false);
+                DebugLog.Write("[RecordAssist] StopActiveTracksForFinalizationAsync -> webcam stopped/released");
+            }
+            catch (Exception ex)
+            {
+                DebugLog.Write("[RecordAssist] StopActiveTracksForFinalizationAsync -> webcam ERROR:\n" + ex);
+            }
+
+            try
+            {
+                StopMicSegment(finalStop: true);
+                DebugLog.Write("[RecordAssist] StopActiveTracksForFinalizationAsync -> mic stopped");
+            }
+            catch (Exception ex)
+            {
+                DebugLog.Write("[RecordAssist] StopActiveTracksForFinalizationAsync -> mic ERROR:\n" + ex);
+            }
+
+            try
+            {
+                StopLoopbackSegment(finalStop: true);
+                DebugLog.Write("[RecordAssist] StopActiveTracksForFinalizationAsync -> system audio stopped");
+            }
+            catch (Exception ex)
+            {
+                DebugLog.Write("[RecordAssist] StopActiveTracksForFinalizationAsync -> system audio ERROR:\n" + ex);
+            }
+
             _seg.TryStop();
         }
 
@@ -514,73 +631,20 @@ namespace NessStudio.ViewModel.Helpers
         {
             const int totalSteps = 6;
 
-            var capturedPauseIntervals = new List<SessionManifest.PauseInterval>();
-            ScreenTrackSnapshot screenSnapshot = null;
-
             DebugLog.Write("[RecordAssist] StopAndFinalizeAsync begin");
             ReportSaveProgress(progress, "Saving Recording...", "Preparing finalization...", 5, 1, totalSteps);
 
-            if (_seg.IsRunning)
+            if (_seg.IsRunning || !_tracksStoppedForFinalize)
             {
-                DebugLog.Write("[RecordAssist] stopping active segments...");
-                ReportSaveProgress(progress, "Saving Recording...", "Finalizing screen capture...", 20, 2, totalSteps);
-
-                try
-                {
-                    StopScreenSegment();
-
-                    if (_wgcScreen != null)
-                    {
-                        capturedPauseIntervals = BuildPauseIntervals(_wgcScreen);
-                        screenSnapshot = CaptureScreenSnapshot(_wgcScreen);
-                    }
-
-                    _wgcScreen?.ReleaseSession();
-                    _wgcScreen = null;
-
-                    DebugLog.Write("[RecordAssist] StopScreenSegment + ReleaseSession OK");
-                }
-                catch (Exception ex)
-                {
-                    DebugLog.Write("[RecordAssist] StopScreenSegment ERROR:\n" + ex);
-                }
-
-                ReportSaveProgress(progress, "Saving Recording...", "Finalizing webcam...", 35, 3, totalSteps);
-                try
-                {
-                    await StopWebcamSegmentAsync(releaseSession: true);
-                    DebugLog.Write("[RecordAssist] StopWebcamSegmentAsync OK");
-                }
-                catch (Exception ex)
-                {
-                    DebugLog.Write("[RecordAssist] StopWebcamSegmentAsync ERROR:\n" + ex);
-                }
-
-                ReportSaveProgress(progress, "Saving Recording...", "Finalizing microphone...", 50, 4, totalSteps);
-                try
-                {
-                    StopMicSegment(finalStop: true);
-                    DebugLog.Write("[RecordAssist] StopMicSegment OK");
-                }
-                catch (Exception ex)
-                {
-                    DebugLog.Write("[RecordAssist] StopMicSegment ERROR:\n" + ex);
-                }
-
-                ReportSaveProgress(progress, "Saving Recording...", "Finalizing system audio...", 65, 5, totalSteps);
-                try
-                {
-                    StopLoopbackSegment(finalStop: true);
-                    DebugLog.Write("[RecordAssist] StopLoopbackSegment OK");
-                }
-                catch (Exception ex)
-                {
-                    DebugLog.Write("[RecordAssist] StopLoopbackSegment ERROR:\n" + ex);
-                }
-
-                _seg.TryStop();
-                DebugLog.Write("[RecordAssist] segment state -> stopped");
+                DebugLog.Write("[RecordAssist] StopAndFinalizeAsync -> stopping active tracks now");
+                ReportSaveProgress(progress, "Saving Recording...", "Stopping active tracks...", 20, 2, totalSteps);
+                StopMasterSessionClock();
+                await StopActiveTracksForFinalizationAsync().ConfigureAwait(false);
+                DebugLog.Write("[RecordAssist] StopAndFinalizeAsync -> active tracks stopped");
             }
+
+            var capturedPauseIntervals = _finalizedPauseIntervals ?? new List<SessionManifest.PauseInterval>();
+            ScreenTrackSnapshot screenSnapshot = _finalizedScreenSnapshot;
 
             CleanupLegacyJoinArtifacts();
 
@@ -779,6 +843,9 @@ namespace NessStudio.ViewModel.Helpers
                     SessionId = Guid.NewGuid().ToString("N"),
                     CreatedAt = DateTimeOffset.UtcNow,
                     BaseDir = _paths.BaseDir,
+                    StartedAtUtc = _sessionStartedAtUtc,
+                    StoppedAtUtc = _sessionStoppedAtUtc,
+                    DurationMs = _sessionDurationMs,
                     HasScreen = !string.IsNullOrWhiteSpace(screenPrimary),
                     HasWebcam = !string.IsNullOrWhiteSpace(webcamPrimary),
                     HasMic = !string.IsNullOrWhiteSpace(micPrimary),

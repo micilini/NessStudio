@@ -7,3 +7,6 @@ NessStudio/obj/
 NessStudio/Modules/ffmpeg.exe
 NessStudio/Modules/ffplay.exe
 NessStudio/Modules/ffprobe.exe
+# Native FFmpeg binary - keep local only
+NessStudio/Native/FFmpeg/ffmpeg.exe
+Native/FFmpeg/ffmpeg.exe

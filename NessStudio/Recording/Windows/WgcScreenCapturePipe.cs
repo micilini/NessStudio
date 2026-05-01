@@ -232,17 +232,13 @@ namespace NessStudio.Recording.Windows
             _frameErrors = 0;
             _loggedFirstFrame = false;
 
-            if (segmentIndex > 1)
-            {
-                // P4.2: pipeline já está quente no resume — pular warmup completamente
-                _captureStartedAtUtc = DateTime.UtcNow.AddMilliseconds(-_warmupMilliseconds);
-                DebugLog.Write("[WGC] P4.2 resume — warmup skipped (pipeline always-on)");
-            }
-            else
-            {
-                _captureStartedAtUtc = DateTime.UtcNow;
-                DebugLog.Write($"[WGC] first segment — warmup={_warmupMilliseconds}ms");
-            }
+            // P5.4 sync fix:
+            // The WGC session/framepool is already kept alive before REC.
+            // Recording-time warmup discards made screen.mkv start late while webcam/audio
+            // kept recording from the real session start. Once REC starts, every valid
+            // screen frame must be eligible for writing.
+            _captureStartedAtUtc = DateTime.UtcNow;
+            DebugLog.Write($"[WGC] recording warmup disabled | configuredWarmup={_warmupMilliseconds}ms | pipeline already hot");
 
             if (_segmentIndex > 1 && _lastPauseTimestampHns > 0)
             {
@@ -459,26 +455,31 @@ namespace NessStudio.Recording.Windows
                             _cropH,
                             _frameBuffer);
 
-                        var elapsedMs = (DateTime.UtcNow - _captureStartedAtUtc).TotalMilliseconds;
-                        if (elapsedMs < _warmupMilliseconds)
-                        {
-                            _warmupDiscardedFrames++;
-                            if (_warmupDiscardedFrames == 1 || _warmupDiscardedFrames % 10 == 0)
-                                DebugLog.Write($"[WGC] warmup discard #{_warmupDiscardedFrames} | elapsed={elapsedMs:F0}ms | target={_warmupMilliseconds}ms");
-                            return;
-                        }
-
                         if (_mf == null) return;
 
+                        var frameTimeUtc = DateTime.UtcNow;
                         bool isFirst = !_loggedFirstFrame;
+
                         if (isFirst)
                         {
                             _loggedFirstFrame = true;
-                            _segmentFirstFrameTime = DateTime.UtcNow;
-                            _segmentBasePts = _lastPauseTimestampHns + (10_000_000L / _fps);
+                            _segmentFirstFrameTime = frameTimeUtc;
+
+                            // First segment starts at PTS 0. Resumed segments continue after
+                            // the last pause timestamp. This keeps screen video time aligned
+                            // with the real recording timeline instead of shifting the first
+                            // frame forward by one frame interval.
+                            long frameStepHns = 10_000_000L / Math.Max(1, _fps);
+                            _segmentBasePts = _lastPauseTimestampHns <= 0
+                                ? 0L
+                                : _lastPauseTimestampHns + frameStepHns;
+
+                            DebugLog.Write(
+                                $"[WGC] first recordable frame | segment={_segmentIndex} | " +
+                                $"basePts={_segmentBasePts} | lastPause={_lastPauseTimestampHns} | warmupDiscarded={_warmupDiscardedFrames}");
                         }
 
-                        long elapsedHns = (long)(DateTime.UtcNow - _segmentFirstFrameTime).TotalMilliseconds * 10_000L;
+                        long elapsedHns = (long)(frameTimeUtc - _segmentFirstFrameTime).TotalMilliseconds * 10_000L;
                         long ptsHns = _segmentBasePts + elapsedHns;
 
                         if (!_bufferPool.TryTake(out byte[] encBuf))

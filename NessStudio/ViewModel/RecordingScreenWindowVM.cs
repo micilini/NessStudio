@@ -16,6 +16,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
@@ -350,6 +351,7 @@ namespace NessStudio.ViewModel
         private bool _isRecording = false;
         private bool _isPaused = false;
         private DispatcherTimer _recTimer;
+        private readonly Stopwatch _recordingUiClock = new Stopwatch();
         private TimeSpan _elapsed;
         private bool _isClosing = false;
         private IRecorderEngine _rec;
@@ -399,10 +401,10 @@ namespace NessStudio.ViewModel
                 if (_recTimer == null)
                 {
                     _recTimer = new DispatcherTimer(DispatcherPriority.Background);
-                    _recTimer.Interval = TimeSpan.FromSeconds(1);
+                    _recTimer.Interval = TimeSpan.FromMilliseconds(250);
                     _recTimer.Tick += (s2, e2) =>
                     {
-                        _elapsed = _elapsed.Add(TimeSpan.FromSeconds(1));
+                        _elapsed = _recordingUiClock.Elapsed;
                         TextRecTimer = _elapsed.ToString(@"hh\:mm\:ss");
                     };
                 }
@@ -674,6 +676,7 @@ namespace NessStudio.ViewModel
                 try
                 {
                     try { _recTimer?.Stop(); } catch { }
+                    try { _recordingUiClock.Stop(); } catch { }
                     if (_isRecording && _rec != null)
                     {
                         DebugLog.Write("[VM] close flow -> StopAsync begin");
@@ -1346,6 +1349,7 @@ namespace NessStudio.ViewModel
                 _isRecording = true;
                 _isPaused = false;
                 _elapsed = TimeSpan.Zero;
+                _recordingUiClock.Reset();
                 TextRecTimer = "00:00:00";
                 PauseResumeText = "Pause";
                 IsRecordingPanelVisible = true;
@@ -1355,6 +1359,8 @@ namespace NessStudio.ViewModel
 
                 DebugLog.Write("[VM] Calling _rec.StartAsync()");
                 RecordingPerfProbe.Mark("recording-start-dispatch");
+                _recordingUiClock.Restart();
+                _recTimer.Start();
                 await _rec.StartAsync();
 
                 DebugLog.Write("[VM] _rec.StartAsync() succeeded");
@@ -1366,7 +1372,8 @@ namespace NessStudio.ViewModel
                 await DisableUiPreviewsForActiveRecordingAsync();
 
                 IsEditEnabled = true;
-                _recTimer.Start();
+                _elapsed = _recordingUiClock.Elapsed;
+                TextRecTimer = _elapsed.ToString(@"hh\:mm\:ss");
                 RecordingPerfProbe.Mark("recording-running");
             }
             catch (Exception ex)
@@ -1374,12 +1381,14 @@ namespace NessStudio.ViewModel
                 DebugLog.Write("[VM] BtnRec_Click ERROR:\n" + ex);
 
                 try { _recTimer.Stop(); } catch { }
+                try { _recordingUiClock.Stop(); } catch { }
                 try { _rec?.Dispose(); } catch { }
 
                 _rec = null;
                 _isRecording = false;
                 _isPaused = false;
                 _elapsed = TimeSpan.Zero;
+                _recordingUiClock.Reset();
 
                 ResetUiPreviewSuppression();
                 ClearDrawAreaOverlay();
@@ -1425,6 +1434,9 @@ namespace NessStudio.ViewModel
                     using var perf = RecordingPerfProbe.Scope("recording-pause");
 
                     _recTimer.Stop();
+                    _recordingUiClock.Stop();
+                    _elapsed = _recordingUiClock.Elapsed;
+                    TextRecTimer = _elapsed.ToString(@"hh\:mm\:ss");
                     PauseResumeText = "Resume";
                     ButtonPlayPauseIcon = "/Assets/Images/play-icon.png";
 
@@ -1449,6 +1461,7 @@ namespace NessStudio.ViewModel
                     RecordingPerfProbe.Mark("recording-resume-dispatch");
                     await _rec.ResumeAsync();
                     RestoreDrawAreaOverlayIfNeeded();
+                    _recordingUiClock.Start();
                     _recTimer.Start();
                     _isPaused = false;
 
@@ -1480,6 +1493,9 @@ namespace NessStudio.ViewModel
             _isSavingRecording = true;
             IsEditEnabled = false;
             _recTimer.Stop();
+            _recordingUiClock.Stop();
+            _elapsed = _recordingUiClock.Elapsed;
+            TextRecTimer = _elapsed.ToString(@"hh\:mm\:ss");
             ClearDrawAreaOverlay();
 
             _uiPreviewSuppressedDuringRecording = true;
@@ -1490,6 +1506,17 @@ namespace NessStudio.ViewModel
             string outDir = OutDirFolder;
             var rec = _rec;
             _rec = null;
+
+            try
+            {
+                DebugLog.Write("[VM] BtnStop_Click -> immediate recorder stop begin");
+                await rec.StopAsync();
+                DebugLog.Write("[VM] BtnStop_Click -> immediate recorder stop end");
+            }
+            catch (Exception ex)
+            {
+                DebugLog.Write("[VM] BtnStop_Click -> immediate recorder stop ERROR:\n" + ex);
+            }
 
             bool canNavigateToHome = false;
             bool closeRequestedWhileSaving = false;
