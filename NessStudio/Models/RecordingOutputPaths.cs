@@ -31,6 +31,9 @@ namespace NessStudio.Models
         public string ScreenContinuous() => Path.Combine(BaseDir, $"{ScreenPrefix}{ScreenExt}");
         public string WebcamContinuous() => Path.Combine(BaseDir, $"{WebcamPrefix}{WebcamExt}");
 
+        public string MicContinuous() => Path.Combine(BaseDir, $"{MicPrefix}{MicExt}");
+        public string SystemContinuous() => Path.Combine(BaseDir, $"{SystemPrefix}{SystemExt}");
+
         public string WebcamSegment(int segment) => SegmentFile(WebcamPrefix, segment, WebcamExt);
         public string MicSegment(int segment) => SegmentFile(MicPrefix, segment, MicExt);
         public string SystemSegment(int segment) => SegmentFile(SystemPrefix, segment, SystemExt);

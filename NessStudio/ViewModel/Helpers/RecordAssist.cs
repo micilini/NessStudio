@@ -26,11 +26,10 @@ namespace NessStudio.ViewModel.Helpers
         private WgcScreenCapturePipe _wgcScreen;
         private WasapiCapture _micCapture;
         private WaveFileWriter _micWriter;
-        private WasapiLoopbackCapture _loopCapture;
-        private WaveFileWriter _loopWriter;
+        private SystemLoopbackSession _loopSession;
         private readonly NessStudio.Models.RecordingSegmentState _seg = new NessStudio.Models.RecordingSegmentState();
-        private System.Timers.Timer _loopTick;
-        private NessStudio.Models.AudioClockState _clock = new NessStudio.Models.AudioClockState();
+        private DateTime _micPausedAt;
+        private bool _micSessionOpen;
         private readonly RecordingRuntimeOptions _runtimeOptions;
 
         private sealed class ScreenTrackSnapshot
@@ -372,15 +371,34 @@ namespace NessStudio.ViewModel.Helpers
             if (string.IsNullOrWhiteSpace(_targets.MicDeviceId))
                 return;
 
-            string outFile = _paths.MicSegment(_seg.SegmentIndex);
+            if (_micSessionOpen && _micWriter != null)
+            {
+                _micCapture = MicCaptureService.Resume(_targets.MicDeviceId, _micWriter, _micPausedAt);
+                DebugLog.Write("[RecordAssist] MicSegment resumed | continuous file");
+                return;
+            }
+
+            string outFile = _paths.MicContinuous();
             (_micCapture, _micWriter) = MicCaptureService.Start(_targets.MicDeviceId, outFile);
+            _micSessionOpen = true;
+            DebugLog.Write($"[RecordAssist] MicSegment started | outFile={outFile}");
         }
 
-        private void StopMicSegment()
+        private void StopMicSegment(bool finalStop = false)
         {
-            MicCaptureService.Stop(_micCapture, _micWriter);
-            _micCapture = null;
-            _micWriter = null;
+            if (finalStop || !_micSessionOpen)
+            {
+                MicCaptureService.Stop(_micCapture, _micWriter);
+                _micCapture = null;
+                _micWriter = null;
+                _micSessionOpen = false;
+            }
+            else
+            {
+                _micPausedAt = MicCaptureService.Pause(_micCapture);
+                _micCapture = null;
+                DebugLog.Write($"[RecordAssist] MicSegment paused | pausedAt={_micPausedAt:HH:mm:ss.fff}");
+            }
         }
 
         private void StartLoopbackSegment()
@@ -388,18 +406,31 @@ namespace NessStudio.ViewModel.Helpers
             if (string.IsNullOrWhiteSpace(_targets.LoopbackDeviceId))
                 return;
 
-            string outFile = _paths.SystemSegment(_seg.SegmentIndex);
-            (_loopCapture, _loopWriter, _clock, _loopTick) =
-                SystemLoopbackService.Start(_targets.LoopbackDeviceId, outFile);
+            if (_loopSession != null)
+            {
+                _loopSession.Resume();
+                DebugLog.Write("[RecordAssist] LoopbackSegment resumed");
+                return;
+            }
+
+            string outFile = _paths.SystemContinuous();
+            _loopSession = new SystemLoopbackSession(_targets.LoopbackDeviceId);
+            _loopSession.Start(outFile);
+            DebugLog.Write($"[RecordAssist] LoopbackSegment started | outFile={outFile}");
         }
 
-        private void StopLoopbackSegment()
+        private void StopLoopbackSegment(bool finalStop = false)
         {
-            SystemLoopbackService.Stop(_loopCapture, _loopWriter, _loopTick);
-            _loopTick = null;
-            _loopWriter = null;
-            _loopCapture = null;
-            _clock = new NessStudio.Models.AudioClockState();
+            if (finalStop)
+            {
+                _loopSession?.Stop();
+                _loopSession = null;
+            }
+            else
+            {
+                _loopSession?.Pause();
+                DebugLog.Write("[RecordAssist] LoopbackSegment paused");
+            }
         }
 
         private static async Task WaitForFileReadyAsync(string filePath, string label, int timeoutMs = 2500, int pollMs = 25)
@@ -505,7 +536,7 @@ namespace NessStudio.ViewModel.Helpers
                 ReportSaveProgress(progress, "Saving Recording...", "Finalizing microphone...", 50, 4, totalSteps);
                 try
                 {
-                    StopMicSegment();
+                    StopMicSegment(finalStop: true);
                     DebugLog.Write("[RecordAssist] StopMicSegment OK");
                 }
                 catch (Exception ex)
@@ -516,7 +547,7 @@ namespace NessStudio.ViewModel.Helpers
                 ReportSaveProgress(progress, "Saving Recording...", "Finalizing system audio...", 65, 5, totalSteps);
                 try
                 {
-                    StopLoopbackSegment();
+                    StopLoopbackSegment(finalStop: true);
                     DebugLog.Write("[RecordAssist] StopLoopbackSegment OK");
                 }
                 catch (Exception ex)
@@ -539,8 +570,16 @@ namespace NessStudio.ViewModel.Helpers
             var webcamParts = File.Exists(webcamContinuousFile)
                 ? new List<string> { webcamContinuousFile }
                 : _paths.Parts(_paths.WebcamPrefix, _paths.WebcamExt);
-            var micParts = _paths.Parts(_paths.MicPrefix, _paths.MicExt);
-            var sysParts = _paths.Parts(_paths.SystemPrefix, _paths.SystemExt);
+
+            var micContinuous = _paths.MicContinuous();
+            var micParts = File.Exists(micContinuous)
+                ? new List<string> { micContinuous }
+                : _paths.Parts(_paths.MicPrefix, _paths.MicExt);
+
+            var sysContinuous = _paths.SystemContinuous();
+            var sysParts = File.Exists(sysContinuous)
+                ? new List<string> { sysContinuous }
+                : _paths.Parts(_paths.SystemPrefix, _paths.SystemExt);
 
             await WaitForTrackFilesReadyAsync(micParts, "mic").ConfigureAwait(false);
             await WaitForTrackFilesReadyAsync(sysParts, "system").ConfigureAwait(false);
@@ -587,14 +626,8 @@ namespace NessStudio.ViewModel.Helpers
                 .Where(File.Exists)
                 .Where(f =>
                 {
-                    try
-                    {
-                        return new FileInfo(f).Length > 0;
-                    }
-                    catch
-                    {
-                        return false;
-                    }
+                    try { return new FileInfo(f).Length > 0; }
+                    catch { return false; }
                 })
                 .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
                 .FirstOrDefault();
@@ -691,15 +724,12 @@ namespace NessStudio.ViewModel.Helpers
                 try
                 {
                     DebugLog.Write($"[RecordAssist] BuildVideoSegments -> reading {p}");
-
                     var v = VideoInfoReader.ReadMp4Info(p);
-
                     result.Add(new SessionManifest.SegmentEntry
                     {
                         File = Path.GetFileName(p),
                         Duration = SessionManifestWriter.FormatDuration(v?.Duration ?? TimeSpan.Zero)
                     });
-
                     DebugLog.Write(
                         $"[RecordAssist] BuildVideoSegments -> done {p} | " +
                         $"duration={SessionManifestWriter.FormatDuration(v?.Duration ?? TimeSpan.Zero)}");
@@ -734,14 +764,7 @@ namespace NessStudio.ViewModel.Helpers
 
                 foreach (var t in trash)
                 {
-                    try
-                    {
-                        if (File.Exists(t))
-                            File.Delete(t);
-                    }
-                    catch
-                    {
-                    }
+                    try { if (File.Exists(t)) File.Delete(t); } catch { }
                 }
 
                 foreach (var f in Directory.EnumerateFiles(_paths.BaseDir, "*.tmp_*.mp4", SearchOption.TopDirectoryOnly))
@@ -880,20 +903,19 @@ namespace NessStudio.ViewModel.Helpers
                 _wgcScreen = null;
                 screenToRelease?.ReleaseSession();
             }
-            catch
-            {
-            }
+            catch { }
 
             try
             {
                 StopWebcamSegmentAsync(releaseSession: true).GetAwaiter().GetResult();
             }
-            catch
-            {
-            }
+            catch { }
 
-            StopMicSegment();
-            StopLoopbackSegment();
+            StopMicSegment(finalStop: true);
+
+            try { _loopSession?.Stop(); } catch { }
+            _loopSession = null;
+
             _wgcWebcam = null;
         }
     }
