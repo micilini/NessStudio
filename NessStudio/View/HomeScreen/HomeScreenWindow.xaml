@@ -12,34 +12,90 @@
         AllowsTransparency="true"
         ResizeMode="CanResize"
         Background="{x:Null}"
-        Title="HomeScreenWindow" Height="768" Width="1050" MinHeight="600" MinWidth="800">
+        Title="HomeScreenWindow"
+        Height="768"
+        Width="1080"
+        MinHeight="600"
+        MinWidth="800">
+
     <shell:WindowChrome.WindowChrome>
         <shell:WindowChrome
-            CaptionHeight="60"            
+            CaptionHeight="60"
             ResizeBorderThickness="8"
             CornerRadius="12"
             GlassFrameThickness="0"
             UseAeroCaptionButtons="False"/>
     </shell:WindowChrome.WindowChrome>
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="60" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-        <materialDesign:ColorZone Grid.Row="0" Height="Auto" Background="#23272A" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" >
-            <ContentControl Content="{Binding HeaderContent}" />
-        </materialDesign:ColorZone>
-        <materialDesign:ColorZone Grid.Row="1" Height="Auto" Background="#17191A" VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="250" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Border Grid.Column="0" BorderBrush="#202C34" BorderThickness="0,0,2,0" Background="Transparent">
-                    <ContentControl Content="{Binding MenuContent}" />
+
+    <Border x:Name="HomeWindowOuterBorder"
+            CornerRadius="16"
+            Background="Transparent"
+            SnapsToDevicePixels="True"
+            ClipToBounds="True">
+        <Border x:Name="HomeWindowInnerBorder"
+                Margin="1"
+                CornerRadius="15"
+                Background="#171A1D"
+                SnapsToDevicePixels="True"
+                ClipToBounds="True">
+            <Grid x:Name="HomeWindowClipGrid"
+                  ClipToBounds="True">
+                <Grid.OpacityMask>
+                    <VisualBrush>
+                        <VisualBrush.Visual>
+                            <Border Width="{Binding ActualWidth, ElementName=HomeWindowClipGrid}"
+                                    Height="{Binding ActualHeight, ElementName=HomeWindowClipGrid}"
+                                    CornerRadius="15"
+                                    Background="Black" />
+                        </VisualBrush.Visual>
+                    </VisualBrush>
+                </Grid.OpacityMask>
+
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="64" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0"
+                        Background="#202427"
+                        BorderBrush="#30363B"
+                        BorderThickness="0,0,0,1">
+                    <ContentControl Content="{Binding HeaderContent}" />
                 </Border>
-                <ContentControl Content="{Binding ProjectsContent}" Grid.Column="1" />
+
+                <Grid Grid.Row="1"
+                      Background="#171A1D">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="270" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0"
+                            Background="#141719"
+                            BorderBrush="#2A3035"
+                            BorderThickness="0,0,1,0">
+                        <ContentControl Content="{Binding MenuContent}" />
+                    </Border>
+
+                    <Border Grid.Column="1"
+                            Background="#171A1D">
+                        <Grid>
+                            <Grid.Background>
+                                <RadialGradientBrush Center="0.1,0.0"
+                                                     GradientOrigin="0.1,0.0"
+                                                     RadiusX="1.1"
+                                                     RadiusY="1.1">
+                                    <GradientStop Color="#2A2022" Offset="0" />
+                                    <GradientStop Color="#171A1D" Offset="0.42" />
+                                    <GradientStop Color="#171A1D" Offset="1" />
+                                </RadialGradientBrush>
+                            </Grid.Background>
+
+                            <ContentControl Content="{Binding ProjectsContent}" />
+                        </Grid>
+                    </Border>
+                </Grid>
             </Grid>
-        </materialDesign:ColorZone>
-    </Grid>
-</Window>
+        </Border>
+    </Border>
+</Window>

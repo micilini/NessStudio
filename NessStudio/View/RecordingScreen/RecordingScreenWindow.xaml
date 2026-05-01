@@ -9,760 +9,791 @@
         WindowStyle="SingleBorderWindow"
         ResizeMode="CanMinimize"
         WindowStartupLocation="CenterScreen"
-        Background="#1C1F21"
+        Background="#171A1D"
         Title="Ness Studio Recorder"
-        Height="250" Width="710"
-        MinHeight="250" MaxHeight="250"
-        MinWidth="710"  MaxWidth="710">
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
-        <Border Grid.Row="0"
-            Background="#232629"
-            BorderBrush="#2A2F33"
-            BorderThickness="0,0,0,1"
-            Visibility="{Binding IsSettingsPanelVisible, Converter={StaticResource BoolToVis}}">
-            <Menu Background="#232629"
-              Foreground="#CCD5D7"
-              BorderThickness="0"
-              Padding="6,0,6,0">
-                <Menu.Resources>
-                    <Style TargetType="MenuItem">
-                        <Setter Property="Background" Value="#232629"/>
-                        <Setter Property="Foreground" Value="#CCD5D7"/>
-                        <Setter Property="FontSize" Value="12"/>
-                        <Setter Property="Padding" Value="10,4"/>
-                        <Setter Property="Height" Value="30"/>
-                        <Setter Property="MinWidth" Value="120"/>
-                        <Setter Property="Template">
-                            <Setter.Value>
-                                <ControlTemplate TargetType="MenuItem">
-                                    <Border x:Name="RootBorder"
-                        Background="{TemplateBinding Background}"
-                        BorderBrush="Transparent"
-                        BorderThickness="1"
-                        CornerRadius="4"
-                        SnapsToDevicePixels="True">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="6"/>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="18"/>
-                                            </Grid.ColumnDefinitions>
-                                            <Border x:Name="SelectedMarker"
-                                Grid.Column="0"
-                                Width="3"
-                                Margin="2,4,1,4"
-                                CornerRadius="2"
-                                Background="#FF5A5A"
-                                Visibility="Collapsed"/>
-                                            <ContentPresenter Grid.Column="1"
-                                          ContentSource="Header"
-                                          Margin="8,0,10,0"
-                                          VerticalAlignment="Center"
-                                          RecognizesAccessKey="True"/>
-                                            <Path x:Name="SubmenuArrow"
-                              Grid.Column="2"
-                              Margin="0,0,8,0"
-                              VerticalAlignment="Center"
-                              HorizontalAlignment="Center"
-                              Fill="#CCD5D7"
-                              Data="M 0 0 L 4 4 L 0 8 Z"
-                              Visibility="Collapsed"/>
-                                            <Popup x:Name="PART_Popup"
-                               AllowsTransparency="True"
-                               Focusable="False"
-                               IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
-                               Placement="Bottom"
-                               PopupAnimation="Fade">
-                                                <Border Background="#232629"
-                                    BorderBrush="#2A2F33"
-                                    BorderThickness="1"
-                                    CornerRadius="4"
-                                    Padding="4">
-                                                    <StackPanel IsItemsHost="True"
-                                            KeyboardNavigation.DirectionalNavigation="Cycle"/>
-                                                </Border>
-                                            </Popup>
-                                        </Grid>
+        Height="270"
+        Width="740"
+        MinHeight="270"
+        MaxHeight="270"
+        MinWidth="740"
+        MaxWidth="740">
+
+    <Window.Resources>
+        <SolidColorBrush x:Key="RecorderBackgroundBrush" Color="#171A1D" />
+        <SolidColorBrush x:Key="RecorderPanelBrush" Color="#202427" />
+        <SolidColorBrush x:Key="RecorderCardBrush" Color="#23272A" />
+        <SolidColorBrush x:Key="RecorderCardInnerBrush" Color="#1D2124" />
+        <SolidColorBrush x:Key="RecorderPreviewBrush" Color="#15181A" />
+        <SolidColorBrush x:Key="RecorderBorderBrush" Color="#30363B" />
+        <SolidColorBrush x:Key="RecorderSoftBorderBrush" Color="#343B40" />
+        <SolidColorBrush x:Key="RecorderTextBrush" Color="#CCD5D7" />
+        <SolidColorBrush x:Key="RecorderMutedBrush" Color="#708089" />
+        <SolidColorBrush x:Key="RecorderAccentBrush" Color="#FF3131" />
+        <SolidColorBrush x:Key="RecorderAccentDarkBrush" Color="#2A2022" />
+        <SolidColorBrush x:Key="RecorderAccentBorderBrush" Color="#B33333" />
+
+        <Style x:Key="RecorderMenuItemStyle" TargetType="{x:Type MenuItem}">
+            <Setter Property="Background" Value="#202427" />
+            <Setter Property="Foreground" Value="#CCD5D7" />
+            <Setter Property="FontFamily" Value="Arial" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="10,5" />
+            <Setter Property="Height" Value="31" />
+            <Setter Property="MinWidth" Value="120" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type MenuItem}">
+                        <Border x:Name="RootBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="Transparent"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                SnapsToDevicePixels="True">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="7" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="18" />
+                                </Grid.ColumnDefinitions>
+
+                                <Border x:Name="SelectedMarker"
+                                        Grid.Column="0"
+                                        Width="3"
+                                        Margin="2,5,2,5"
+                                        CornerRadius="3"
+                                        Background="{StaticResource RecorderAccentBrush}"
+                                        Visibility="Collapsed" />
+
+                                <ContentPresenter Grid.Column="1"
+                                                  ContentSource="Header"
+                                                  Margin="8,0,10,0"
+                                                  VerticalAlignment="Center"
+                                                  RecognizesAccessKey="True" />
+
+                                <Path x:Name="SubmenuArrow"
+                                      Grid.Column="2"
+                                      Margin="0,0,8,0"
+                                      VerticalAlignment="Center"
+                                      HorizontalAlignment="Center"
+                                      Fill="#CCD5D7"
+                                      Data="M 0 0 L 4 4 L 0 8 Z"
+                                      Visibility="Collapsed" />
+
+                                <Popup x:Name="PART_Popup"
+                                       AllowsTransparency="True"
+                                       Focusable="False"
+                                       IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                                       Placement="Bottom"
+                                       PopupAnimation="Fade">
+                                    <Border Background="#202427"
+                                            BorderBrush="#343B40"
+                                            BorderThickness="1"
+                                            CornerRadius="10"
+                                            Padding="5">
+                                        <StackPanel IsItemsHost="True"
+                                                    KeyboardNavigation.DirectionalNavigation="Cycle" />
                                     </Border>
-                                    <ControlTemplate.Triggers>
-                                        <Trigger Property="Role" Value="TopLevelHeader">
-                                            <Setter Property="MinWidth" Value="90"/>
-                                            <Setter TargetName="SubmenuArrow" Property="Visibility" Value="Collapsed"/>
-                                        </Trigger>
-                                        <Trigger Property="Role" Value="SubmenuHeader">
-                                            <Setter TargetName="SubmenuArrow" Property="Visibility" Value="Visible"/>
-                                            <Setter TargetName="PART_Popup" Property="Placement" Value="Right"/>
-                                        </Trigger>
-                                        <Trigger Property="Role" Value="SubmenuItem">
-                                            <Setter TargetName="SubmenuArrow" Property="Visibility" Value="Collapsed"/>
-                                        </Trigger>
-                                        <Trigger Property="IsHighlighted" Value="True">
-                                            <Setter TargetName="RootBorder" Property="Background" Value="#2E3338"/>
-                                            <Setter TargetName="RootBorder" Property="BorderBrush" Value="#3A4045"/>
-                                        </Trigger>
-                                        <Trigger Property="IsSubmenuOpen" Value="True">
-                                            <Setter TargetName="RootBorder" Property="Background" Value="#2E3338"/>
-                                            <Setter TargetName="RootBorder" Property="BorderBrush" Value="#3A4045"/>
-                                        </Trigger>
-                                        <Trigger Property="IsChecked" Value="True">
-                                            <Setter TargetName="RootBorder" Property="Background" Value="#3A2020"/>
-                                            <Setter TargetName="RootBorder" Property="BorderBrush" Value="#FF5A5A"/>
-                                            <Setter Property="Foreground" Value="#FFFFFF"/>
-                                            <Setter TargetName="SelectedMarker" Property="Visibility" Value="Visible"/>
-                                        </Trigger>
-                                        <Trigger Property="IsEnabled" Value="False">
-                                            <Setter Property="Foreground" Value="#708089"/>
-                                        </Trigger>
-                                    </ControlTemplate.Triggers>
-                                </ControlTemplate>
-                            </Setter.Value>
-                        </Setter>
+                                </Popup>
+                            </Grid>
+                        </Border>
+
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="Role" Value="TopLevelHeader">
+                                <Setter Property="MinWidth" Value="90" />
+                                <Setter TargetName="SubmenuArrow" Property="Visibility" Value="Collapsed" />
+                            </Trigger>
+
+                            <Trigger Property="Role" Value="SubmenuHeader">
+                                <Setter TargetName="SubmenuArrow" Property="Visibility" Value="Visible" />
+                                <Setter TargetName="PART_Popup" Property="Placement" Value="Right" />
+                            </Trigger>
+
+                            <Trigger Property="Role" Value="SubmenuItem">
+                                <Setter TargetName="SubmenuArrow" Property="Visibility" Value="Collapsed" />
+                            </Trigger>
+
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="RootBorder" Property="Background" Value="#2A3035" />
+                                <Setter TargetName="RootBorder" Property="BorderBrush" Value="#3A4045" />
+                            </Trigger>
+
+                            <Trigger Property="IsSubmenuOpen" Value="True">
+                                <Setter TargetName="RootBorder" Property="Background" Value="#2A3035" />
+                                <Setter TargetName="RootBorder" Property="BorderBrush" Value="#3A4045" />
+                            </Trigger>
+
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="RootBorder" Property="Background" Value="#2A2022" />
+                                <Setter TargetName="RootBorder" Property="BorderBrush" Value="#B33333" />
+                                <Setter Property="Foreground" Value="#FFFFFF" />
+                                <Setter TargetName="SelectedMarker" Property="Visibility" Value="Visible" />
+                            </Trigger>
+
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#708089" />
+                                <Setter TargetName="RootBorder" Property="Opacity" Value="0.65" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SettingsLeafMenuItemStyle"
+               TargetType="{x:Type MenuItem}"
+               BasedOn="{StaticResource RecorderMenuItemStyle}">
+            <Setter Property="IsCheckable" Value="True" />
+            <Setter Property="StaysOpenOnClick" Value="False" />
+            <Setter Property="MinWidth" Value="116" />
+        </Style>
+
+        <Style x:Key="RecorderCardStyle" TargetType="{x:Type Border}">
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="BorderBrush" Value="{StaticResource RecorderBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="{StaticResource RecorderCardBrush}" />
+            <Setter Property="Padding" Value="9" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+        </Style>
+
+        <Style x:Key="RecorderPreviewBoxStyle" TargetType="{x:Type Border}">
+            <Setter Property="Width" Value="160" />
+            <Setter Property="Height" Value="112" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Background" Value="{StaticResource RecorderPreviewBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource RecorderSoftBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="ClipToBounds" Value="True" />
+        </Style>
+
+        <Style x:Key="RecorderSectionTitleStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="FontFamily" Value="Arial" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="{StaticResource RecorderTextBrush}" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="RecorderMutedTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="FontFamily" Value="Arial" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{StaticResource RecorderMutedBrush}" />
+        </Style>
+
+        <Style x:Key="RecorderComboBoxToggleButtonStyle" TargetType="{x:Type ToggleButton}">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="ClickMode" Value="Press" />
+            <Setter Property="OverridesDefaultStyle" Value="True" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ToggleButton}">
+                        <Border x:Name="Header"
+                                Background="#15181A"
+                                BorderBrush="#343B40"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="8,0"
+                                SnapsToDevicePixels="True">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="18" />
+                                </Grid.ColumnDefinitions>
+
+                                <ContentPresenter Margin="0"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Left"
+                                                  Content="{Binding SelectionBoxItem, RelativeSource={RelativeSource AncestorType=ComboBox}}"
+                                                  ContentTemplate="{Binding SelectionBoxItemTemplate, RelativeSource={RelativeSource AncestorType=ComboBox}}"
+                                                  ContentTemplateSelector="{Binding ItemTemplateSelector, RelativeSource={RelativeSource AncestorType=ComboBox}}" />
+
+                                <Path x:Name="Arrow"
+                                      Grid.Column="1"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      Width="10"
+                                      Height="6"
+                                      Data="M 0 0 L 10 0 L 5 6 Z"
+                                      Fill="#CCD5D7" />
+                            </Grid>
+                        </Border>
+
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Header" Property="BorderBrush" Value="#B33333" />
+                                <Setter TargetName="Header" Property="Background" Value="#202427" />
+                            </Trigger>
+
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Header" Property="BorderBrush" Value="#B33333" />
+                            </Trigger>
+
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Header" Property="Opacity" Value="0.6" />
+                                <Setter TargetName="Arrow" Property="Fill" Value="#889195" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="RecorderComboBoxStyle" TargetType="{x:Type ComboBox}">
+            <Setter Property="Height" Value="30" />
+            <Setter Property="MinWidth" Value="112" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Foreground" Value="#CCD5D7" />
+            <Setter Property="FontFamily" Value="Arial" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="IsEditable" Value="False" />
+            <Setter Property="MaxDropDownHeight" Value="260" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ComboBox}">
+                        <Grid SnapsToDevicePixels="True">
+                            <ToggleButton x:Name="PART_DropDownToggle"
+                                          Style="{StaticResource RecorderComboBoxToggleButtonStyle}"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                          Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ComboBox}}" />
+
+                            <Popup x:Name="PART_Popup"
+                                   Placement="Bottom"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   StaysOpen="False"
+                                   PopupAnimation="Slide">
+                                <Border Background="#15181A"
+                                        BorderBrush="#B33333"
+                                        BorderThickness="1"
+                                        Padding="4"
+                                        CornerRadius="10"
+                                        SnapsToDevicePixels="True">
+                                    <ScrollViewer CanContentScroll="True"
+                                                  Background="Transparent"
+                                                  Padding="0"
+                                                  VerticalScrollBarVisibility="Auto"
+                                                  HorizontalScrollBarVisibility="Disabled">
+                                        <ItemsPresenter />
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="{x:Type ComboBoxItem}">
+                        <Setter Property="Foreground" Value="#CCD5D7" />
+                        <Setter Property="Background" Value="#15181A" />
+                        <Setter Property="Padding" Value="8,6" />
+                        <Setter Property="SnapsToDevicePixels" Value="True" />
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#202427" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Background" Value="#2A2022" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#778088" />
+                            </Trigger>
+                        </Style.Triggers>
                     </Style>
-                    <Style x:Key="SettingsLeafMenuItemStyle" TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
-                        <Setter Property="IsCheckable" Value="True"/>
-                        <Setter Property="StaysOpenOnClick" Value="False"/>
-                        <Setter Property="MinWidth" Value="110"/>
-                    </Style>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="RecorderTransportButtonStyle" TargetType="{x:Type Button}">
+            <Setter Property="Background" Value="#202427" />
+            <Setter Property="BorderBrush" Value="#30363B" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Width" Value="112" />
+            <Setter Property="Height" Value="112" />
+            <Setter Property="Padding" Value="14" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="16"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#2A2022" />
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#B33333" />
+                            </Trigger>
+
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#351D1D" />
+                            </Trigger>
+
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.55" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Background="{StaticResource RecorderBackgroundBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0"
+                Background="#202427"
+                BorderBrush="#30363B"
+                BorderThickness="0,0,0,1"
+                Visibility="{Binding IsSettingsPanelVisible, Converter={StaticResource BoolToVis}}">
+            <Menu Background="#202427"
+                  Foreground="#CCD5D7"
+                  BorderThickness="0"
+                  Padding="8,4,8,4">
+                <Menu.Resources>
+                    <Style TargetType="{x:Type MenuItem}" BasedOn="{StaticResource RecorderMenuItemStyle}" />
                 </Menu.Resources>
-                <MenuItem Header="Settings" IsEnabled="{Binding IsEditEnabled}">
+
+                <MenuItem Header="Settings"
+                          IsEnabled="{Binding IsEditEnabled}">
                     <MenuItem Header="FPS">
                         <MenuItem.ItemsSource>
-                            <Binding Path="FpsOptions"/>
+                            <Binding Path="FpsOptions" />
                         </MenuItem.ItemsSource>
+
                         <MenuItem.ItemContainerStyle>
-                            <Style TargetType="MenuItem" BasedOn="{StaticResource SettingsLeafMenuItemStyle}">
-                                <Setter Property="Header" Value="{Binding Label}"/>
-                                <Setter Property="Command" Value="{Binding DataContext.SelectFpsOptionCommand, ElementName=RootWindow}"/>
-                                <Setter Property="CommandParameter" Value="{Binding Value}"/>
-                                <Setter Property="IsChecked" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                            <Style TargetType="{x:Type MenuItem}" BasedOn="{StaticResource SettingsLeafMenuItemStyle}">
+                                <Setter Property="Header" Value="{Binding Label}" />
+                                <Setter Property="Command" Value="{Binding DataContext.SelectFpsOptionCommand, ElementName=RootWindow}" />
+                                <Setter Property="CommandParameter" Value="{Binding Value}" />
+                                <Setter Property="IsChecked" Value="{Binding IsSelected, Mode=TwoWay}" />
                             </Style>
                         </MenuItem.ItemContainerStyle>
                     </MenuItem>
+
                     <MenuItem Header="Timer">
                         <MenuItem.ItemsSource>
-                            <Binding Path="TimerOptions"/>
+                            <Binding Path="TimerOptions" />
                         </MenuItem.ItemsSource>
+
                         <MenuItem.ItemContainerStyle>
-                            <Style TargetType="MenuItem" BasedOn="{StaticResource SettingsLeafMenuItemStyle}">
-                                <Setter Property="Header" Value="{Binding Label}"/>
-                                <Setter Property="Command" Value="{Binding DataContext.SelectTimerOptionCommand, ElementName=RootWindow}"/>
-                                <Setter Property="CommandParameter" Value="{Binding Value}"/>
-                                <Setter Property="IsChecked" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                            <Style TargetType="{x:Type MenuItem}" BasedOn="{StaticResource SettingsLeafMenuItemStyle}">
+                                <Setter Property="Header" Value="{Binding Label}" />
+                                <Setter Property="Command" Value="{Binding DataContext.SelectTimerOptionCommand, ElementName=RootWindow}" />
+                                <Setter Property="CommandParameter" Value="{Binding Value}" />
+                                <Setter Property="IsChecked" Value="{Binding IsSelected, Mode=TwoWay}" />
                             </Style>
                         </MenuItem.ItemContainerStyle>
                     </MenuItem>
                 </MenuItem>
             </Menu>
         </Border>
-        <Grid Grid.Row="1" Margin="8,6,8,8" x:Name="GridRecordSettings" Visibility="{Binding IsSettingsPanelVisible, Converter={StaticResource BoolToVis}}">
+
+        <Grid Grid.Row="1"
+              Margin="10,8,10,10"
+              x:Name="GridRecordSettings"
+              Visibility="{Binding IsSettingsPanelVisible, Converter={StaticResource BoolToVis}}">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="170"/>
-                <ColumnDefinition Width="175"/>
-                <ColumnDefinition Width="175"/>
-                <ColumnDefinition Width="175"/>
+                <ColumnDefinition Width="174" />
+                <ColumnDefinition Width="178" />
+                <ColumnDefinition Width="178" />
+                <ColumnDefinition Width="178" />
             </Grid.ColumnDefinitions>
+
             <Border Grid.Column="0"
-             CornerRadius="8"
-             BorderBrush="#2A2F33"
-             BorderThickness="1"
-             Background="#232629"
-             Padding="8">
+                    Style="{StaticResource RecorderCardStyle}">
                 <Grid>
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="8"/>
-                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="8" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <Border Grid.Row="0" IsEnabled="{Binding IsEditEnabled}" IsHitTestVisible="{Binding IsEditEnabled}"
-                     Width="157" Height="116"
-                     HorizontalAlignment="Center"
-                     CornerRadius="6"
-                     Background="#2E3337"
-                     BorderBrush="#3A4045"
-                     BorderThickness="1">
-                        <StackPanel>
-                            <TextBlock Text="Screen Monitor"
-           FontSize="12"
-           Foreground="#CCD5D7"
-           HorizontalAlignment="Center"
-           Margin="0 45 0 0">
+
+                    <Border Grid.Row="0"
+                            IsEnabled="{Binding IsEditEnabled}"
+                            IsHitTestVisible="{Binding IsEditEnabled}"
+                            Style="{StaticResource RecorderPreviewBoxStyle}">
+                        <Grid>
+                            <TextBlock Text="Screen Monitor">
                                 <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Visibility" Value="Visible"/>
+                                    <Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource RecorderSectionTitleStyle}">
+                                        <Setter Property="Visibility" Value="Visible" />
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsScreenEnabled}" Value="True">
-                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Setter Property="Visibility" Value="Collapsed" />
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </TextBlock.Style>
                             </TextBlock>
+
                             <TextBlock Text="{Binding DrawAreaInfoText}"
-           FontSize="12"
-           Foreground="#CCD5D7"
-           HorizontalAlignment="Center"
-           TextWrapping="Wrap"
-           Margin="0 45 0 0"
-           Visibility="{Binding IsDrawAreaInfoVisible,
-                                Converter={StaticResource BoolToVis},
-                                Mode=OneWay}"/>
-                            <Image Source="{Binding ScreenPreviewImage}" RenderOptions.BitmapScalingMode="LowQuality" CacheMode="BitmapCache"
-         Width="157" Height="116"
-         Stretch="Uniform"
-         SnapsToDevicePixels="True"
-         UseLayoutRounding="True"
-         ClipToBounds="True"
-         Visibility="{Binding IsScreenEnabled,
-                              Converter={StaticResource BoolToVis},
-                              Mode=OneWay}"/>
-                        </StackPanel>
+                                       FontSize="12"
+                                       Foreground="#CCD5D7"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       TextAlignment="Center"
+                                       Margin="10"
+                                       Visibility="{Binding IsDrawAreaInfoVisible, Converter={StaticResource BoolToVis}, Mode=OneWay}" />
+
+                            <Image Source="{Binding ScreenPreviewImage}"
+                                   RenderOptions.BitmapScalingMode="LowQuality"
+                                   CacheMode="BitmapCache"
+                                   Width="160"
+                                   Height="112"
+                                   Stretch="Uniform"
+                                   SnapsToDevicePixels="True"
+                                   UseLayoutRounding="True"
+                                   ClipToBounds="True"
+                                   Visibility="{Binding IsScreenEnabled, Converter={StaticResource BoolToVis}, Mode=OneWay}" />
+                        </Grid>
                     </Border>
+
                     <Grid Grid.Row="2">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="8"/>
-                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
+
                         <ToggleButton Grid.Column="0"
-                               Style="{StaticResource MaterialDesignSwitchToggleButton}"
-                               VerticalAlignment="Center"
-                               IsEnabled="{Binding IsEditEnabled}"
-                               IsChecked="{Binding IsScreenEnabled, Mode=TwoWay}"
-                               >
+                                      Style="{StaticResource MaterialDesignSwitchToggleButton}"
+                                      VerticalAlignment="Center"
+                                      IsEnabled="{Binding IsEditEnabled}"
+                                      IsChecked="{Binding IsScreenEnabled, Mode=TwoWay}">
                             <TextBlock Text=""
-                                Foreground="#CCD5D7"
-                                FontSize="12"
-                                Margin="6,0,0,0"/>
+                                       Foreground="#CCD5D7"
+                                       FontSize="12"
+                                       Margin="6,0,0,0" />
                         </ToggleButton>
-                        <ComboBox
-    Grid.Column="2"
-                            IsEnabled="{Binding IsScreenEnabled}"  IsHitTestVisible="{Binding IsEditEnabled}"
-    ItemsSource="{Binding ScreenOptions}"
-    SelectedItem="{Binding SelectedScreenOption, Mode=TwoWay}"
-    DisplayMemberPath="Display"
-    VerticalAlignment="Center"
-    Height="26"
-    MinWidth="110"
-    Padding="0"
-    Foreground="#CCD5D7"
-    IsEditable="False">
-                            <ComboBox.Template>
-                                <ControlTemplate TargetType="ComboBox">
-                                    <Grid SnapsToDevicePixels="True">
-                                        <ToggleButton x:Name="PART_DropDownToggle"
-                              IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
-                              Focusable="False"
-                              Background="Transparent" Foreground="#CCD5D7"
-                              BorderThickness="0"
-                                                      Width="110"
-                              OverridesDefaultStyle="True"
-                              ClickMode="Press">
-                                            <ToggleButton.Template>
-                                                <ControlTemplate TargetType="ToggleButton">
-                                                    <Border x:Name="Header"
-                                    Background="#2E3338"
-                                    BorderBrush="#23282C"
-                                    BorderThickness="1"
-                                    CornerRadius="4"
-                                    Padding="6,0"
-                                    MinWidth="{Binding MinWidth, RelativeSource={RelativeSource AncestorType=ComboBox}}"
-                                    SnapsToDevicePixels="True">
-                                                        <Grid>
-                                                            <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition/>
-                                                                <ColumnDefinition Width="18"/>
-                                                            </Grid.ColumnDefinitions>
-                                                            <ContentPresenter
-                                        Margin="0"
-                                        VerticalAlignment="Center"
-                                        HorizontalAlignment="Left"
-                                        Content="{Binding SelectionBoxItem, RelativeSource={RelativeSource AncestorType=ComboBox}}"
-                                        ContentTemplate="{Binding SelectionBoxItemTemplate, RelativeSource={RelativeSource AncestorType=ComboBox}}"
-                                        ContentTemplateSelector="{Binding ItemTemplateSelector, RelativeSource={RelativeSource AncestorType=ComboBox}}"/>
-                                                            <Path x:Name="Arrow"
-                                          Grid.Column="1"
-                                          HorizontalAlignment="Center"
-                                          VerticalAlignment="Center"
-                                          Width="10" Height="6"
-                                          Data="M 0 0 L 10 0 L 5 6 Z"
-                                          Fill="#CCD5D7"/>
-                                                        </Grid>
-                                                    </Border>
-                                                    <ControlTemplate.Triggers>
-                                                        <Trigger Property="IsMouseOver" Value="True">
-                                                            <Setter TargetName="Header" Property="BorderBrush" Value="#3A4045"/>
-                                                        </Trigger>
-                                                        <Trigger Property="IsChecked" Value="True">
-                                                            <Setter TargetName="Header" Property="BorderBrush" Value="#3A4045"/>
-                                                        </Trigger>
-                                                        <Trigger Property="IsEnabled" Value="False">
-                                                            <Setter TargetName="Header" Property="Opacity" Value="0.6"/>
-                                                            <Setter TargetName="Arrow" Property="Fill" Value="#889195"/>
-                                                        </Trigger>
-                                                    </ControlTemplate.Triggers>
-                                                </ControlTemplate>
-                                            </ToggleButton.Template>
-                                        </ToggleButton>
-                                        <Popup x:Name="PART_Popup"
-                       Placement="Bottom"
-                       AllowsTransparency="True"
-                       Focusable="False"
-                       IsOpen="{TemplateBinding IsDropDownOpen}"
-                       StaysOpen="False">
-                                            <Border Background="#3A4045"
-                            BorderBrush="#3A4045"
-                            BorderThickness="0"
-                            Padding="0"
-                            CornerRadius="0"
-                            SnapsToDevicePixels="True">
-                                                <ScrollViewer CanContentScroll="True" Background="#3A4045" Padding="0">
-                                                    <ItemsPresenter/>
-                                                </ScrollViewer>
-                                            </Border>
-                                        </Popup>
-                                    </Grid>
-                                </ControlTemplate>
-                            </ComboBox.Template>
-                            <ComboBox.ItemContainerStyle>
-                                <Style TargetType="ComboBoxItem">
-                                    <Setter Property="Foreground" Value="#CCD5D7"/>
-                                    <Setter Property="Background" Value="#3A4045"/>
-                                    <Setter Property="BorderBrush" Value="#3A4045"/>
-                                    <Setter Property="Padding" Value="6,4"/>
-                                    <Setter Property="SnapsToDevicePixels" Value="True"/>
-                                    <Style.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#4A5055"/>
-                                        </Trigger>
-                                        <Trigger Property="IsSelected" Value="True">
-                                            <Setter Property="Background" Value="#576067"/>
-                                            <Setter Property="Foreground" Value="White"/>
-                                        </Trigger>
-                                        <Trigger Property="IsEnabled" Value="False">
-                                            <Setter Property="Foreground" Value="#778088"/>
-                                        </Trigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </ComboBox.ItemContainerStyle>
-                        </ComboBox>
+
+                        <ComboBox Grid.Column="2"
+                                  Style="{StaticResource RecorderComboBoxStyle}"
+                                  IsEnabled="{Binding IsScreenEnabled}"
+                                  IsHitTestVisible="{Binding IsEditEnabled}"
+                                  ItemsSource="{Binding ScreenOptions}"
+                                  SelectedItem="{Binding SelectedScreenOption, Mode=TwoWay}"
+                                  DisplayMemberPath="Display"
+                                  VerticalAlignment="Center" />
                     </Grid>
                 </Grid>
             </Border>
-            <Border Grid.Column="1" IsEnabled="{Binding IsEditEnabled}" IsHitTestVisible="{Binding IsEditEnabled}"
-             Margin="5 0 0 0"
-     CornerRadius="8"
-     BorderBrush="#2A2F33"
-     BorderThickness="1"
-     Background="#232629"
-     Padding="8">
+
+            <Border Grid.Column="1"
+                    Style="{StaticResource RecorderCardStyle}"
+                    IsEnabled="{Binding IsEditEnabled}"
+                    IsHitTestVisible="{Binding IsEditEnabled}"
+                    Margin="6,0,0,0">
                 <Grid>
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="8"/>
-                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="8" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
+
                     <Border Grid.Row="0"
-             Width="157" Height="116"
-             HorizontalAlignment="Center"
-             CornerRadius="6"
-             Background="#2E3337"
-             BorderBrush="#3A4045"
-             BorderThickness="1">
-                        <StackPanel>
-                            <TextBlock Text="Screen Webcam"
-           FontSize="12"
-           Foreground="#CCD5D7"
-           HorizontalAlignment="Center"
-           Margin="0 45 0 0">
+                            Style="{StaticResource RecorderPreviewBoxStyle}">
+                        <Grid>
+                            <TextBlock Text="Screen Webcam">
                                 <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Visibility" Value="Visible"/>
+                                    <Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource RecorderSectionTitleStyle}">
+                                        <Setter Property="Visibility" Value="Visible" />
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsWebcamEnabled}" Value="True">
-                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Setter Property="Visibility" Value="Collapsed" />
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </TextBlock.Style>
                             </TextBlock>
-                            <Image Source="{Binding WebcamPreviewImage}" Visibility="{Binding IsWebcamEnabled, Converter={StaticResource BoolToVis}, Mode=OneWay}"
-                        Width="157" Height="116"
-                                   RenderOptions.BitmapScalingMode="LowQuality" CacheMode="BitmapCache"
-                        Stretch="Uniform"
-                        SnapsToDevicePixels="True"
-                        UseLayoutRounding="True"
-                        ClipToBounds="True"/>
-                        </StackPanel>
+
+                            <Image Source="{Binding WebcamPreviewImage}"
+                                   Visibility="{Binding IsWebcamEnabled, Converter={StaticResource BoolToVis}, Mode=OneWay}"
+                                   Width="160"
+                                   Height="112"
+                                   RenderOptions.BitmapScalingMode="LowQuality"
+                                   CacheMode="BitmapCache"
+                                   Stretch="Uniform"
+                                   SnapsToDevicePixels="True"
+                                   UseLayoutRounding="True"
+                                   ClipToBounds="True" />
+                        </Grid>
                     </Border>
+
                     <Grid Grid.Row="2">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="8"/>
-                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
+
                         <ToggleButton x:Name="tglWebcam"
-           Style="{StaticResource MaterialDesignSwitchToggleButton}"
-           VerticalAlignment="Center"
-           IsEnabled="{Binding IsEditEnabled}"
-           IsChecked="{Binding IsWebcamEnabled, Mode=TwoWay}">
-                            <TextBlock Text="" Foreground="#CCD5D7" FontSize="12" Margin="6,0,0,0"/>
+                                      Grid.Column="0"
+                                      Style="{StaticResource MaterialDesignSwitchToggleButton}"
+                                      VerticalAlignment="Center"
+                                      IsEnabled="{Binding IsEditEnabled}"
+                                      IsChecked="{Binding IsWebcamEnabled, Mode=TwoWay}">
+                            <TextBlock Text=""
+                                       Foreground="#CCD5D7"
+                                       FontSize="12"
+                                       Margin="6,0,0,0" />
                         </ToggleButton>
-                        <ComboBox
-    Grid.Column="2"
-                            IsEnabled="{Binding IsWebcamEnabled}" IsHitTestVisible="{Binding IsEditEnabled}"
-    ItemsSource="{Binding Webcams}"
-    SelectedItem="{Binding SelectedWebcam, Mode=TwoWay}"
-    DisplayMemberPath="Name"
-    VerticalAlignment="Center"
-    Height="26"
-    MinWidth="110"
-    Padding="0"
-    Foreground="#CCD5D7"
-    IsEditable="False"
-    MaxDropDownHeight="260">
-                            <ComboBox.Template>
-                                <ControlTemplate TargetType="ComboBox">
-                                    <Grid SnapsToDevicePixels="True">
-                                        <ToggleButton x:Name="PART_DropDownToggle"
-                              IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
-                              Focusable="False" Foreground="#CCD5D7"
-                              Background="Transparent"
-                              BorderThickness="0"
-                              OverridesDefaultStyle="True"
-                              FocusVisualStyle="{x:Null}"
-                              ClickMode="Press"
-                              Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ComboBox}}">
-                                            <ToggleButton.Template>
-                                                <ControlTemplate TargetType="ToggleButton">
-                                                    <Border x:Name="Header"
-                                    Background="#2E3338"
-                                    BorderBrush="#23282C"
-                                    BorderThickness="1"
-                                    CornerRadius="4"
-                                    Padding="6,0"
-                                    MinWidth="{Binding MinWidth, RelativeSource={RelativeSource AncestorType=ComboBox}}"
-                                    SnapsToDevicePixels="True">
-                                                        <Grid>
-                                                            <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition/>
-                                                                <ColumnDefinition Width="18"/>
-                                                            </Grid.ColumnDefinitions>
-                                                            <ContentPresenter
-                                        Margin="0"
-                                        VerticalAlignment="Center"
-                                        HorizontalAlignment="Left"
-                                        Content="{Binding SelectionBoxItem, RelativeSource={RelativeSource AncestorType=ComboBox}}"
-                                        ContentTemplate="{Binding SelectionBoxItemTemplate, RelativeSource={RelativeSource AncestorType=ComboBox}}"
-                                        ContentTemplateSelector="{Binding ItemTemplateSelector, RelativeSource={RelativeSource AncestorType=ComboBox}}"/>
-                                                            <Path x:Name="Arrow"
-                                          Grid.Column="1"
-                                          HorizontalAlignment="Center"
-                                          VerticalAlignment="Center"
-                                          Width="10" Height="6"
-                                          Data="M 0 0 L 10 0 L 5 6 Z"
-                                          Fill="#CCD5D7"/>
-                                                        </Grid>
-                                                    </Border>
-                                                    <ControlTemplate.Triggers>
-                                                        <Trigger Property="IsMouseOver" Value="True">
-                                                            <Setter TargetName="Header" Property="BorderBrush" Value="#3A4045"/>
-                                                        </Trigger>
-                                                        <Trigger Property="IsChecked" Value="True">
-                                                            <Setter TargetName="Header" Property="BorderBrush" Value="#3A4045"/>
-                                                        </Trigger>
-                                                        <Trigger Property="IsEnabled" Value="False">
-                                                            <Setter TargetName="Header" Property="Opacity" Value="0.6"/>
-                                                            <Setter TargetName="Arrow" Property="Fill" Value="#889195"/>
-                                                        </Trigger>
-                                                    </ControlTemplate.Triggers>
-                                                </ControlTemplate>
-                                            </ToggleButton.Template>
-                                        </ToggleButton>
-                                        <Popup x:Name="PART_Popup"
-                       Placement="Bottom"
-                       AllowsTransparency="True"
-                       Focusable="False"
-                       IsOpen="{TemplateBinding IsDropDownOpen}"
-                       StaysOpen="False">
-                                            <Border Background="#3A4045"
-                            BorderBrush="#3A4045"
-                            BorderThickness="0"
-                            Padding="0"
-                            CornerRadius="0"
-                            SnapsToDevicePixels="True">
-                                                <ScrollViewer CanContentScroll="True" Background="#3A4045" Padding="0">
-                                                    <ItemsPresenter/>
-                                                </ScrollViewer>
-                                            </Border>
-                                        </Popup>
-                                    </Grid>
-                                </ControlTemplate>
-                            </ComboBox.Template>
-                            <ComboBox.ItemContainerStyle>
-                                <Style TargetType="ComboBoxItem">
-                                    <Setter Property="Foreground" Value="#CCD5D7"/>
-                                    <Setter Property="Background" Value="#3A4045"/>
-                                    <Setter Property="BorderBrush" Value="#3A4045"/>
-                                    <Setter Property="Padding" Value="6,4"/>
-                                    <Setter Property="SnapsToDevicePixels" Value="True"/>
-                                    <Style.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#4A5055"/>
-                                        </Trigger>
-                                        <Trigger Property="IsSelected" Value="True">
-                                            <Setter Property="Background" Value="#576067"/>
-                                            <Setter Property="Foreground" Value="White"/>
-                                        </Trigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </ComboBox.ItemContainerStyle>
-                        </ComboBox>
+
+                        <ComboBox Grid.Column="2"
+                                  Style="{StaticResource RecorderComboBoxStyle}"
+                                  IsEnabled="{Binding IsWebcamEnabled}"
+                                  IsHitTestVisible="{Binding IsEditEnabled}"
+                                  ItemsSource="{Binding Webcams}"
+                                  SelectedItem="{Binding SelectedWebcam, Mode=TwoWay}"
+                                  DisplayMemberPath="Name"
+                                  VerticalAlignment="Center"
+                                  MaxDropDownHeight="260" />
                     </Grid>
                 </Grid>
             </Border>
-            <Border Grid.Column="2" IsEnabled="{Binding IsEditEnabled}" IsHitTestVisible="{Binding IsEditEnabled}"
-     Margin="05,0,0,0"
-     CornerRadius="8"
-     BorderBrush="#2A2F33"
-     BorderThickness="1"
-     Background="#232629"
-     Padding="8">
-                <StackPanel VerticalAlignment="Center" >
-                    <StackPanel Margin="0 0 0 0">
+
+            <Border Grid.Column="2"
+                    Style="{StaticResource RecorderCardStyle}"
+                    IsEnabled="{Binding IsEditEnabled}"
+                    IsHitTestVisible="{Binding IsEditEnabled}"
+                    Margin="6,0,0,0">
+                <StackPanel VerticalAlignment="Center">
+                    <StackPanel>
                         <DockPanel Margin="0,0,0,8">
                             <Image Source="{Binding MicrophoneIcon}"
-                    Width="25" Height="25" RenderOptions.BitmapScalingMode="HighQuality"
-                    Margin="0,0,6,0"
-                    VerticalAlignment="Center"/>
-                            <Slider Minimum="0" Maximum="100" x:Name="sldMicVolume" Value="80" IsEnabled="{Binding IsMicrophoneEnabled}"
-                     Height="22"
-                     />
+                                   Width="25"
+                                   Height="25"
+                                   RenderOptions.BitmapScalingMode="HighQuality"
+                                   Margin="0,0,8,0"
+                                   VerticalAlignment="Center" />
+
+                            <Slider Minimum="0"
+                                    Maximum="100"
+                                    x:Name="sldMicVolume"
+                                    Value="80"
+                                    IsEnabled="{Binding IsMicrophoneEnabled}"
+                                    Height="22" />
                         </DockPanel>
+
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="8"/>
-                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <ToggleButton Grid.Column="0" x:Name="tglMicrophone" IsChecked="{Binding IsMicrophoneEnabled, Mode=TwoWay}" IsEnabled="{Binding IsEditEnabled}"
-                           Style="{StaticResource MaterialDesignSwitchToggleButton}"
-                           VerticalAlignment="Center"
-                          >
+
+                            <ToggleButton Grid.Column="0"
+                                          x:Name="tglMicrophone"
+                                          IsChecked="{Binding IsMicrophoneEnabled, Mode=TwoWay}"
+                                          IsEnabled="{Binding IsEditEnabled}"
+                                          Style="{StaticResource MaterialDesignSwitchToggleButton}"
+                                          VerticalAlignment="Center">
                                 <TextBlock Text=""
-                            Foreground="#CCD5D7"
-                            FontSize="12"
-                            Margin="6,0,0,0"/>
+                                           Foreground="#CCD5D7"
+                                           FontSize="12"
+                                           Margin="6,0,0,0" />
                             </ToggleButton>
-                            <ComboBox
-    Grid.Column="2"
-                                IsEnabled="{Binding IsMicrophoneEnabled}" IsHitTestVisible="{Binding IsEditEnabled}"
-    ItemsSource="{Binding Microphones}"
-    SelectedItem="{Binding SelectedMicrophone, Mode=TwoWay}"
-    DisplayMemberPath="FriendlyName"
-    VerticalAlignment="Center"
-    Height="26"
-    MinWidth="110"
-    Padding="0"
-    Foreground="#CCD5D7"
-    IsEditable="False"
-    MaxDropDownHeight="260">
-                                <ComboBox.Template>
-                                    <ControlTemplate TargetType="ComboBox">
-                                        <Grid SnapsToDevicePixels="True">
-                                            <ToggleButton x:Name="PART_DropDownToggle"
-                              IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
-                              Focusable="False"
-                              Background="Transparent" Foreground="#CCD5D7"
-                              BorderThickness="0"
-                              OverridesDefaultStyle="True"
-                              FocusVisualStyle="{x:Null}"
-                              ClickMode="Press"
-                              Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ComboBox}}">
-                                                <ToggleButton.Template>
-                                                    <ControlTemplate TargetType="ToggleButton">
-                                                        <Border x:Name="Header"
-                                    Background="#2E3338"
-                                    BorderBrush="#23282C"
-                                    BorderThickness="1"
-                                    CornerRadius="4"
-                                    Padding="6,0"
-                                    MinWidth="{Binding MinWidth, RelativeSource={RelativeSource AncestorType=ComboBox}}"
-                                    SnapsToDevicePixels="True">
-                                                            <Grid>
-                                                                <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition/>
-                                                                    <ColumnDefinition Width="18"/>
-                                                                </Grid.ColumnDefinitions>
-                                                                <ContentPresenter
-                                        Margin="0"
-                                        VerticalAlignment="Center"
-                                        HorizontalAlignment="Left"
-                                        Content="{Binding SelectionBoxItem, RelativeSource={RelativeSource AncestorType=ComboBox}}"
-                                        ContentTemplate="{Binding SelectionBoxItemTemplate, RelativeSource={RelativeSource AncestorType=ComboBox}}"
-                                        ContentTemplateSelector="{Binding ItemTemplateSelector, RelativeSource={RelativeSource AncestorType=ComboBox}}"/>
-                                                                <Path x:Name="Arrow"
-                                          Grid.Column="1"
-                                          HorizontalAlignment="Center"
-                                          VerticalAlignment="Center"
-                                          Width="10" Height="6"
-                                          Data="M 0 0 L 10 0 L 5 6 Z"
-                                          Fill="#CCD5D7"/>
-                                                            </Grid>
-                                                        </Border>
-                                                        <ControlTemplate.Triggers>
-                                                            <Trigger Property="IsMouseOver" Value="True">
-                                                                <Setter TargetName="Header" Property="BorderBrush" Value="#3A4045"/>
-                                                            </Trigger>
-                                                            <Trigger Property="IsChecked" Value="True">
-                                                                <Setter TargetName="Header" Property="BorderBrush" Value="#3A4045"/>
-                                                            </Trigger>
-                                                            <Trigger Property="IsEnabled" Value="False">
-                                                                <Setter TargetName="Header" Property="Opacity" Value="0.6"/>
-                                                                <Setter TargetName="Arrow" Property="Fill" Value="#889195"/>
-                                                            </Trigger>
-                                                        </ControlTemplate.Triggers>
-                                                    </ControlTemplate>
-                                                </ToggleButton.Template>
-                                            </ToggleButton>
-                                            <Popup x:Name="PART_Popup"
-                       Placement="Bottom"
-                       AllowsTransparency="True"
-                       Focusable="False"
-                       IsOpen="{TemplateBinding IsDropDownOpen}"
-                       StaysOpen="False">
-                                                <Border Background="#3A4045"
-                            BorderBrush="#3A4045"
-                            BorderThickness="0"
-                            Padding="0"
-                            CornerRadius="0"
-                            SnapsToDevicePixels="True">
-                                                    <ScrollViewer CanContentScroll="True" Background="#3A4045" Padding="0">
-                                                        <ItemsPresenter/>
-                                                    </ScrollViewer>
-                                                </Border>
-                                            </Popup>
-                                        </Grid>
-                                    </ControlTemplate>
-                                </ComboBox.Template>
-                                <ComboBox.ItemContainerStyle>
-                                    <Style TargetType="ComboBoxItem">
-                                        <Setter Property="Foreground" Value="#CCD5D7"/>
-                                        <Setter Property="Background" Value="#3A4045"/>
-                                        <Setter Property="BorderBrush" Value="#3A4045"/>
-                                        <Setter Property="Padding" Value="6,4"/>
-                                        <Setter Property="SnapsToDevicePixels" Value="True"/>
-                                        <Style.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Background" Value="#4A5055"/>
-                                            </Trigger>
-                                            <Trigger Property="IsSelected" Value="True">
-                                                <Setter Property="Background" Value="#576067"/>
-                                                <Setter Property="Foreground" Value="White"/>
-                                            </Trigger>
-                                            <Trigger Property="IsEnabled" Value="False">
-                                                <Setter Property="Foreground" Value="#778088"/>
-                                            </Trigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </ComboBox.ItemContainerStyle>
-                            </ComboBox>
+
+                            <ComboBox Grid.Column="2"
+                                      Style="{StaticResource RecorderComboBoxStyle}"
+                                      IsEnabled="{Binding IsMicrophoneEnabled}"
+                                      IsHitTestVisible="{Binding IsEditEnabled}"
+                                      ItemsSource="{Binding Microphones}"
+                                      SelectedItem="{Binding SelectedMicrophone, Mode=TwoWay}"
+                                      DisplayMemberPath="FriendlyName"
+                                      VerticalAlignment="Center"
+                                      MaxDropDownHeight="260" />
                         </Grid>
                     </StackPanel>
-                    <StackPanel Margin="0 15 0 15">
-                        <Border BorderThickness="0,0,0,1" BorderBrush="#708089" />
-                    </StackPanel>
+
+                    <Border Height="1"
+                            Background="#343B40"
+                            Margin="0,15,0,15" />
+
                     <StackPanel>
                         <DockPanel Margin="0,0,0,8">
                             <Image Source="{Binding SystemAudioIcon}"
-                    Width="25" Height="25"
-                    Margin="0,0,6,0" RenderOptions.BitmapScalingMode="HighQuality"
-                    VerticalAlignment="Center"/>
-                            <Slider Minimum="0" Maximum="100" x:Name="sldSystemVolume" Value="80" IsEnabled="{Binding IsSystemAudioEnabled}"
-                     Height="22"
-                     />
+                                   Width="25"
+                                   Height="25"
+                                   Margin="0,0,8,0"
+                                   RenderOptions.BitmapScalingMode="HighQuality"
+                                   VerticalAlignment="Center" />
+
+                            <Slider Minimum="0"
+                                    Maximum="100"
+                                    x:Name="sldSystemVolume"
+                                    Value="80"
+                                    IsEnabled="{Binding IsSystemAudioEnabled}"
+                                    Height="22" />
                         </DockPanel>
+
                         <WrapPanel VerticalAlignment="Center">
-                            <ToggleButton Style="{StaticResource MaterialDesignSwitchToggleButton}" IsEnabled="{Binding IsEditEnabled}"
-                            x:Name="tglSystemAudio" IsChecked="{Binding IsSystemAudioEnabled, Mode=TwoWay}"
-                           VerticalAlignment="Center">
+                            <ToggleButton Style="{StaticResource MaterialDesignSwitchToggleButton}"
+                                          IsEnabled="{Binding IsEditEnabled}"
+                                          x:Name="tglSystemAudio"
+                                          IsChecked="{Binding IsSystemAudioEnabled, Mode=TwoWay}"
+                                          VerticalAlignment="Center">
                                 <TextBlock Text=""
-                            Foreground="#CCD5D7"
-                            FontSize="12"
-                            Margin="6,0,0,0"/>
+                                           Foreground="#CCD5D7"
+                                           FontSize="12"
+                                           Margin="6,0,0,0" />
                             </ToggleButton>
+
                             <TextBlock Text="System Audio"
-                                Foreground="#708089"
-                                FontSize="12"
-                                Margin="6"
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Center"/>
+                                       Foreground="#708089"
+                                       FontSize="12"
+                                       Margin="7,0,0,0"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
                         </WrapPanel>
                     </StackPanel>
                 </StackPanel>
             </Border>
-            <Border Grid.Column="3" IsEnabled="{Binding IsEditEnabled}" IsHitTestVisible="{Binding IsEditEnabled}"
-     Margin="-9 0 0 0"
-     CornerRadius="8"
-     BorderBrush="#2A2F33"
-     BorderThickness="1"
-     Background="#232629"
-     Padding="8"
-     HorizontalAlignment="Center"
-     VerticalAlignment="Center">
-                <Button Background="Transparent" Command="{Binding PlayRecodingCommand}" 
-         BorderThickness="0"
-         Cursor="Hand"
-         Width="120" Height="120">
-                    <StackPanel>
-                        <Image Source="/Assets/Images/rec-icon.png" Visibility="{Binding IsRecButtonVisible, Converter={StaticResource BoolToVis}}"
-            Stretch="Uniform"/>
-                        <TextBlock x:Name="txtCountdown" Visibility="{Binding IsCountdownVisible, Converter={StaticResource BoolToVis}}"
-           Text="{Binding CountdownText}"
-           FontFamily="Arial"
-           FontSize="36"
-           FontWeight="Bold"
-           Foreground="#FF5A5A"
-           HorizontalAlignment="Center"
-           VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
+
+            <Border Grid.Column="3"
+                    Style="{StaticResource RecorderCardStyle}"
+                    IsEnabled="{Binding IsEditEnabled}"
+                    IsHitTestVisible="{Binding IsEditEnabled}"
+                    Margin="6,0,0,0"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch">
+                <Grid>
+                    <Button Background="Transparent"
+                            Command="{Binding PlayRecodingCommand}"
+                            BorderThickness="0"
+                            Cursor="Hand"
+                            Width="120"
+                            Height="120"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center">
+                        <StackPanel>
+                            <Image Source="/Assets/Images/rec-icon.png"
+                                   Visibility="{Binding IsRecButtonVisible, Converter={StaticResource BoolToVis}}"
+                                   Stretch="Uniform" />
+
+                            <TextBlock x:Name="txtCountdown"
+                                       Visibility="{Binding IsCountdownVisible, Converter={StaticResource BoolToVis}}"
+                                       Text="{Binding CountdownText}"
+                                       FontFamily="Arial"
+                                       FontSize="36"
+                                       FontWeight="Bold"
+                                       Foreground="#FF5A5A"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
             </Border>
         </Grid>
-        <Grid Grid.Row="1" x:Name="GridRecord" Visibility="{Binding IsRecordingPanelVisible, Converter={StaticResource BoolToVis}}" Background="#1C1F21" IsEnabled="{Binding IsEditEnabled}">
+
+        <Grid Grid.Row="1"
+              x:Name="GridRecord"
+              Visibility="{Binding IsRecordingPanelVisible, Converter={StaticResource BoolToVis}}"
+              Background="#171A1D"
+              IsEnabled="{Binding IsEditEnabled}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="120" />
                 <ColumnDefinition Width="120" />
             </Grid.ColumnDefinitions>
-            <Grid Grid.Column="0" Margin="20">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="40" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-                <StackPanel Grid.Row="0" Background="#2E3337">
-                    <TextBlock Text="Duration Recording" FontFamily="Arial" FontSize="20" Foreground="#CCD5D7" HorizontalAlignment="Center" Margin="0 6 0 0" />
-                </StackPanel>
-                <StackPanel Grid.Row="1" Background="#232629">
-                    <TextBlock x:Name="txtRecTimer" Text="{Binding TextRecTimer, Mode=TwoWay}" Foreground="#CCD5D7" FontFamily="Arial" FontWeight="Bold" FontSize="44" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0 32 0 0"/>
-                </StackPanel>
-            </Grid>
-            <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
-                <Button Background="Transparent" BorderThickness="0" Cursor="Hand" Width="120" Height="120" Command="{Binding PauseRecordingCommand}">
+
+            <Border Grid.Column="0"
+                    Margin="18"
+                    CornerRadius="16"
+                    Background="#23272A"
+                    BorderBrush="#30363B"
+                    BorderThickness="1"
+                    Padding="0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="42" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0"
+                            Background="#202427"
+                            BorderBrush="#343B40"
+                            BorderThickness="0,0,0,1"
+                            CornerRadius="16,16,0,0">
+                        <TextBlock Text="Duration Recording"
+                                   FontFamily="Arial"
+                                   FontSize="18"
+                                   Foreground="#CCD5D7"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+
+                    <Border Grid.Row="1"
+                            Background="#1D2124"
+                            CornerRadius="0,0,16,16">
+                        <TextBlock x:Name="txtRecTimer"
+                                   Text="{Binding TextRecTimer, Mode=TwoWay}"
+                                   Foreground="#CCD5D7"
+                                   FontFamily="Arial"
+                                   FontWeight="Bold"
+                                   FontSize="46"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                </Grid>
+            </Border>
+
+            <StackPanel Grid.Column="1"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center">
+                <Button Style="{StaticResource RecorderTransportButtonStyle}"
+                        Command="{Binding PauseRecordingCommand}">
                     <StackPanel>
-                        <Image Source="{Binding ButtonPlayPauseIcon}" Stretch="Uniform"/>
-                        <TextBlock TextAlignment="Center" Text="{Binding PauseResumeText, Mode=TwoWay}" Foreground="#CCD5D7" FontFamily="Arial" FontWeight="Medium" />
+                        <Image Source="{Binding ButtonPlayPauseIcon}"
+                               Stretch="Uniform" />
+
+                        <TextBlock TextAlignment="Center"
+                                   Text="{Binding PauseResumeText, Mode=TwoWay}"
+                                   Foreground="#CCD5D7"
+                                   FontFamily="Arial"
+                                   FontWeight="Medium"
+                                   Margin="0,4,0,0" />
                     </StackPanel>
                 </Button>
             </StackPanel>
-            <StackPanel Grid.Column="2" HorizontalAlignment="Center" VerticalAlignment="Center">
-                <Button Background="Transparent" BorderThickness="0" Cursor="Hand" Width="120" Height="120" Command="{Binding StopRecordingCommand}">
+
+            <StackPanel Grid.Column="2"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center">
+                <Button Style="{StaticResource RecorderTransportButtonStyle}"
+                        Command="{Binding StopRecordingCommand}">
                     <StackPanel>
-                        <Image Source="/Assets/Images/stop-icon.png" Stretch="Uniform"/>
-                        <TextBlock TextAlignment="Center" Text="Stop" Foreground="#CCD5D7" FontFamily="Arial" FontWeight="Medium" />
+                        <Image Source="/Assets/Images/stop-icon.png"
+                               Stretch="Uniform" />
+
+                        <TextBlock TextAlignment="Center"
+                                   Text="Stop"
+                                   Foreground="#CCD5D7"
+                                   FontFamily="Arial"
+                                   FontWeight="Medium"
+                                   Margin="0,4,0,0" />
                     </StackPanel>
                 </Button>
             </StackPanel>

@@ -6,68 +6,135 @@
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
         mc:Ignorable="d"
         Title="Saving Recording"
-        Width="420"
-        Height="190"
-        MinWidth="420"
-        MaxWidth="420"
-        MinHeight="190"
-        MaxHeight="190"
-        ResizeMode="CanResize"
-        WindowStyle="SingleBorderWindow"
-        AllowsTransparency="False"
-        Background="#1C1F21"
+        Width="460"
+        Height="220"
+        MinWidth="460"
+        MaxWidth="460"
+        MinHeight="220"
+        MaxHeight="220"
+        ResizeMode="NoResize"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="{x:Null}"
         ShowInTaskbar="True"
         WindowStartupLocation="CenterScreen"
         Topmost="True">
-    <materialDesign:Card Background="#23272A"
-                         UniformCornerRadius="14"
-                         Padding="18">
-        <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="14"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="16"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="12"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
-            <StackPanel Orientation="Horizontal" Grid.Row="0">
-                <Image Source="/Assets/Images/logo-nessstudio.png"
-                       Width="28"
-                       Height="28"
-                       Margin="0,0,10,0"/>
-                <TextBlock Text="{Binding Title}"
-                           VerticalAlignment="Center"
-                           FontFamily="Arial"
-                           FontSize="20"
-                           FontWeight="Bold"
-                           Foreground="#CCD5D7"/>
-            </StackPanel>
-            <TextBlock Grid.Row="2"
-                       Text="{Binding Message}"
-                       TextWrapping="Wrap"
-                       FontFamily="Arial"
-                       FontSize="14"
-                       Foreground="#AAB4B8"/>
-            <ProgressBar Grid.Row="4"
-                         Height="18"
-                         Minimum="0"
-                         Maximum="100"
-                         Value="{Binding Percent}"
-                         IsIndeterminate="{Binding IsIndeterminate}"/>
-            <DockPanel Grid.Row="6">
-                <TextBlock Text="{Binding StepText}"
-                           FontFamily="Arial"
-                           FontSize="12"
-                           Foreground="#8A9499"
-                           DockPanel.Dock="Left"/>
-                <TextBlock Text="{Binding Percent, StringFormat={}{0}%}"
-                           FontFamily="Arial"
-                           FontSize="12"
-                           Foreground="#8A9499"
-                           HorizontalAlignment="Right"/>
-            </DockPanel>
-        </Grid>
-    </materialDesign:Card>
+
+    <Border x:Name="SavingWindowOuterBorder"
+            Width="440"
+            Height="200"
+            CornerRadius="18"
+            Background="#B33333"
+            SnapsToDevicePixels="True"
+            ClipToBounds="True">
+        <Border x:Name="SavingWindowInnerBorder"
+                Margin="1"
+                CornerRadius="17"
+                Background="#23272A"
+                SnapsToDevicePixels="True"
+                ClipToBounds="True">
+            <Grid x:Name="SavingWindowClipGrid"
+                  ClipToBounds="True">
+                <Grid.OpacityMask>
+                    <VisualBrush>
+                        <VisualBrush.Visual>
+                            <Border Width="{Binding ActualWidth, ElementName=SavingWindowClipGrid}"
+                                    Height="{Binding ActualHeight, ElementName=SavingWindowClipGrid}"
+                                    CornerRadius="17"
+                                    Background="Black" />
+                        </VisualBrush.Visual>
+                    </VisualBrush>
+                </Grid.OpacityMask>
+
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="76" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0"
+                        Background="#23272A"
+                        BorderBrush="#343B40"
+                        BorderThickness="0,0,0,1"
+                        Padding="22,16">
+                    <StackPanel Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                        <Border Width="42"
+                                Height="42"
+                                CornerRadius="14"
+                                Background="#2A2022"
+                                BorderBrush="#663131"
+                                BorderThickness="1"
+                                Margin="0,0,13,0">
+                            <Image Source="/Assets/Images/logo-nessstudio.png"
+                                   RenderOptions.BitmapScalingMode="HighQuality"
+                                   Width="28"
+                                   Height="28"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                        </Border>
+
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Title}"
+                                       VerticalAlignment="Center"
+                                       FontFamily="Arial"
+                                       FontSize="20"
+                                       FontWeight="Bold"
+                                       Foreground="#CCD5D7" />
+
+                            <TextBlock Text="Please keep this window open while NessStudio finishes the recording."
+                                       FontFamily="Arial"
+                                       FontSize="12"
+                                       Foreground="#708089"
+                                       Margin="0,4,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="1"
+                        Background="#202427"
+                        Padding="22,18">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="16" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="12" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0"
+                                   Text="{Binding Message}"
+                                   TextWrapping="Wrap"
+                                   FontFamily="Arial"
+                                   FontSize="14"
+                                   Foreground="#AAB4B8"
+                                   LineHeight="20" />
+
+                        <ProgressBar Grid.Row="2"
+                                     Height="6"
+                                     Value="{Binding Percent}"
+                                     IsIndeterminate="{Binding IsIndeterminate}"
+                                     Foreground="#E74C3C"
+                                     BorderBrush="Transparent"
+                                     Background="#FF5384B5"
+                                     Style="{StaticResource MaterialDesignLinearProgressBar}" />
+
+                        <DockPanel Grid.Row="4">
+                            <TextBlock Text="{Binding StepText}"
+                                       FontFamily="Arial"
+                                       FontSize="12"
+                                       Foreground="#708089"
+                                       DockPanel.Dock="Left" />
+
+                            <TextBlock Text="{Binding Percent, StringFormat={}{0}%}"
+                                       FontFamily="Arial"
+                                       FontSize="12"
+                                       Foreground="#708089"
+                                       HorizontalAlignment="Right" />
+                        </DockPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+    </Border>
 </Window>

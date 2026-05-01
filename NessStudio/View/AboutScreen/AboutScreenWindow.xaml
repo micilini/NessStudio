@@ -4,99 +4,515 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:NessStudio.View.AboutScreen"
-        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
         xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
         mc:Ignorable="d"
         TextElement.Foreground="{DynamicResource MaterialDesignBody}"
         Background="{x:Null}"
         AllowsTransparency="true"
         WindowStyle="None"
+        ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen"
-        Title="AboutScreenWindow" Height="560" Width="665">
-    <materialDesign:Card Background="#23272A" UniformCornerRadius="15" Width="526" Height="460">
-        <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="70" />
-                <RowDefinition Height="440" />
-            </Grid.RowDefinitions>
-            <StackPanel Grid.Row="0">
-                <WrapPanel Margin="20">
-                    <Image RenderOptions.BitmapScalingMode="HighQuality" Source="/Assets/Images/close-icon-white.png" Width="30" Height="30" Margin="0 0 10 0" Cursor="Hand" MouseLeftButtonUp="OnCloseIconClicked" />
-                    <Image RenderOptions.BitmapScalingMode="HighQuality" Source="/Assets/Images/info-icon.png" Width="30" Height="30" Margin="0 0 10 0" />
-                    <Label Content="About Application" FontFamily="Arial" FontSize="22" FontWeight="Bold" Foreground="#CCD5D7" />
-                </WrapPanel>
-            </StackPanel>
-            <StackPanel Grid.Row="1" Margin="20">
-                <WrapPanel Margin="0 0 0 10">
-                    <TextBlock Text="Application ID: " FontFamily="Arial" FontSize="16" FontWeight="Bold" Foreground="#CCD5D7" />
-                    <TextBlock x:Name="AppId" Text="--" FontFamily="Arial" FontSize="16" FontWeight="Light" Margin="6 0 0 0" Foreground="#636e72" />
-                </WrapPanel>
-                <StackPanel>
-                    <TextBlock Text="Ness Studio, V. 1.1.0. This application is in beta version." FontFamily="Arial" FontSize="16" FontWeight="Bold" Foreground="#CCD5D7" />
-                    <TextBlock x:Name="AppV" Text="" FontFamily="Arial" FontSize="16" FontWeight="Light" Margin="6 0 0 0" Foreground="#636e72" />
-                    <TextBlock Text="Click here to check for Updates."
-                               FontFamily="Arial"
-                               FontSize="16"
-                               FontWeight="Regular"
-                               Margin="0 0 0 0"
-                               Foreground="white"
-                               TextDecorations="Underline"
-                               Cursor="Hand">
-                        <i:Interaction.Triggers>
-                          <i:EventTrigger EventName="MouseLeftButtonUp">
-                            <i:CallMethodAction TargetObject="{Binding RelativeSource={RelativeSource AncestorType=Window}}"
-                                    MethodName="CheckForUpdates"/>
-                          </i:EventTrigger>
-                        </i:Interaction.Triggers>
-                    </TextBlock>
-                </StackPanel>
-                <StackPanel Margin="0,18,0,0">
-                    <TextBlock Text="Diagnostics"
-               FontFamily="Arial"
-               FontSize="16"
-               FontWeight="Bold"
-               Foreground="#CCD5D7" />
-                    <CheckBox x:Name="EnableDebugLogsCheckBox"
-              Content="Enable Debug Logs"
-              Margin="0,10,0,0"
-              Foreground="White"
-              FontFamily="Arial"
-              FontSize="15"
-              Checked="EnableDebugLogsCheckBox_Checked"
-              Unchecked="EnableDebugLogsCheckBox_Unchecked" />
-                </StackPanel>
-                <TabControl Margin="0,20,0,0" Height="145">
-                    <TabItem Header="MIT License">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Disabled"
-                      Padding="10">
-                            <TextBlock TextWrapping="Wrap"
-                       FontFamily="Consolas"
-                                       Foreground="white"
-                       FontSize="14">
+        Title="About Application"
+        Height="620"
+        Width="720">
+
+    <Window.Resources>
+        <Style x:Key="DarkScrollBarThumbStyle" TargetType="{x:Type Thumb}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Thumb}">
+                        <Border x:Name="ThumbBorder"
+                                Width="8"
+                                HorizontalAlignment="Center"
+                                Background="#3A4248"
+                                CornerRadius="8"
+                                Opacity="0.92" />
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ThumbBorder" Property="Background" Value="#4B555C" />
+                                <Setter TargetName="ThumbBorder" Property="Width" Value="9" />
+                            </Trigger>
+                            <Trigger Property="IsDragging" Value="True">
+                                <Setter TargetName="ThumbBorder" Property="Background" Value="#B33333" />
+                                <Setter TargetName="ThumbBorder" Property="Width" Value="9" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DarkScrollBarRepeatButtonStyle" TargetType="{x:Type RepeatButton}">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type RepeatButton}">
+                        <Border Background="Transparent" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DarkVerticalScrollBarStyle" TargetType="{x:Type ScrollBar}">
+            <Setter Property="Width" Value="14" />
+            <Setter Property="Margin" Value="12,0,0,0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ScrollBar}">
+                        <Grid Width="{TemplateBinding Width}"
+                              Background="Transparent">
+                            <Border Width="10"
+                                    HorizontalAlignment="Center"
+                                    Background="#15181A"
+                                    CornerRadius="8"
+                                    Opacity="0.95" />
+
+                            <Track x:Name="PART_Track"
+                                   IsDirectionReversed="True">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="{x:Static ScrollBar.PageUpCommand}"
+                                                  Style="{StaticResource DarkScrollBarRepeatButtonStyle}" />
+                                </Track.DecreaseRepeatButton>
+
+                                <Track.Thumb>
+                                    <Thumb Style="{StaticResource DarkScrollBarThumbStyle}" />
+                                </Track.Thumb>
+
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="{x:Static ScrollBar.PageDownCommand}"
+                                                  Style="{StaticResource DarkScrollBarRepeatButtonStyle}" />
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DarkScrollViewerStyle" TargetType="{x:Type ScrollViewer}">
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+            <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="PanningMode" Value="VerticalOnly" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ScrollViewer}">
+                        <Grid Background="Transparent">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="28" />
+                            </Grid.ColumnDefinitions>
+
+                            <ScrollContentPresenter x:Name="PART_ScrollContentPresenter"
+                                                    Grid.Column="0"
+                                                    Content="{TemplateBinding Content}"
+                                                    ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                    ContentStringFormat="{TemplateBinding ContentStringFormat}"
+                                                    CanContentScroll="{TemplateBinding CanContentScroll}"
+                                                    Margin="0" />
+
+                            <ScrollBar x:Name="PART_VerticalScrollBar"
+                                       Grid.Column="1"
+                                       Style="{StaticResource DarkVerticalScrollBarStyle}"
+                                       Orientation="Vertical"
+                                       Minimum="0"
+                                       Maximum="{TemplateBinding ScrollableHeight}"
+                                       ViewportSize="{TemplateBinding ViewportHeight}"
+                                       Value="{Binding VerticalOffset, RelativeSource={RelativeSource TemplatedParent}, Mode=OneWay}"
+                                       Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource DarkVerticalScrollBarStyle}" />
+
+        <Style x:Key="AboutPrimaryButtonStyle" TargetType="{x:Type Button}">
+            <Setter Property="Height" Value="40" />
+            <Setter Property="Padding" Value="18,0" />
+            <Setter Property="Background" Value="#FF3131" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="FontFamily" Value="Arial" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="12"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#FF4545" />
+                            </Trigger>
+
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#B33333" />
+                            </Trigger>
+
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.55" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="AboutCloseButtonStyle" TargetType="{x:Type Border}">
+            <Setter Property="Width" Value="38" />
+            <Setter Property="Height" Value="38" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#2A3035" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="AboutSecondaryBorderButtonStyle" TargetType="{x:Type Border}">
+            <Setter Property="Height" Value="40" />
+            <Setter Property="MinWidth" Value="86" />
+            <Setter Property="Padding" Value="18,0" />
+            <Setter Property="Background" Value="#202427" />
+            <Setter Property="BorderBrush" Value="#343B40" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#2A3035" />
+                    <Setter Property="BorderBrush" Value="#B33333" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Border x:Name="AboutWindowOuterBorder"
+            Width="650"
+            Height="540"
+            CornerRadius="18"
+            Background="#B33333"
+            SnapsToDevicePixels="True"
+            ClipToBounds="True">
+        <Border x:Name="AboutWindowInnerBorder"
+                Margin="1"
+                CornerRadius="17"
+                Background="#23272A"
+                SnapsToDevicePixels="True"
+                ClipToBounds="True">
+            <Grid x:Name="AboutWindowClipGrid"
+                  ClipToBounds="True">
+                <Grid.OpacityMask>
+                    <VisualBrush>
+                        <VisualBrush.Visual>
+                            <Border Width="{Binding ActualWidth, ElementName=AboutWindowClipGrid}"
+                                    Height="{Binding ActualHeight, ElementName=AboutWindowClipGrid}"
+                                    CornerRadius="17"
+                                    Background="Black" />
+                        </VisualBrush.Visual>
+                    </VisualBrush>
+                </Grid.OpacityMask>
+
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="88" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="82" />
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0"
+                        Background="#23272A"
+                        BorderBrush="#343B40"
+                        BorderThickness="0,0,0,1"
+                        Padding="24,18">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0"
+                                    Orientation="Horizontal"
+                                    VerticalAlignment="Center">
+                            <Border Width="44"
+                                    Height="44"
+                                    CornerRadius="14"
+                                    Background="#2A2022"
+                                    BorderBrush="#663131"
+                                    BorderThickness="1"
+                                    Margin="0,0,14,0">
+                                <Image RenderOptions.BitmapScalingMode="HighQuality"
+                                       Source="/Assets/Images/info-icon.png"
+                                       Width="27"
+                                       Height="27"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+                            </Border>
+
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="About Application"
+                                           FontFamily="Arial"
+                                           FontSize="23"
+                                           FontWeight="Bold"
+                                           Foreground="#CCD5D7" />
+
+                                <TextBlock Text="NessStudio information, diagnostics and license."
+                                           FontFamily="Arial"
+                                           FontSize="13"
+                                           Foreground="#708089"
+                                           Margin="0,5,0,0" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <Border Grid.Column="1"
+                                Style="{StaticResource AboutCloseButtonStyle}"
+                                MouseLeftButtonUp="OnCloseIconClicked">
+                            <Image RenderOptions.BitmapScalingMode="HighQuality"
+                                   Source="/Assets/Images/close-icon-white.png"
+                                   Width="18"
+                                   Height="18"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <ScrollViewer Grid.Row="1"
+                              Style="{StaticResource DarkScrollViewerStyle}">
+                    <StackPanel Margin="24,24,34,24">
+                        <Border Background="#1D2124"
+                                BorderBrush="#30363B"
+                                BorderThickness="1"
+                                CornerRadius="16"
+                                Padding="18">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Text="Application ID"
+                                               FontFamily="Arial"
+                                               FontSize="13"
+                                               FontWeight="Bold"
+                                               Foreground="#708089"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,14,0" />
+
+                                    <Border Grid.Column="1"
+                                            Background="#15181A"
+                                            BorderBrush="#343B40"
+                                            BorderThickness="1"
+                                            CornerRadius="10"
+                                            Padding="12,8">
+                                        <TextBlock x:Name="AppId"
+                                                   Text="--"
+                                                   FontFamily="Consolas"
+                                                   FontSize="13"
+                                                   FontWeight="Regular"
+                                                   Foreground="#CCD5D7"
+                                                   TextWrapping="Wrap" />
+                                    </Border>
+                                </Grid>
+
+                                <Border Background="#2A2022"
+                                        BorderBrush="#663131"
+                                        BorderThickness="1"
+                                        CornerRadius="14"
+                                        Padding="16"
+                                        Margin="0,16,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="Ness Studio"
+                                                   FontFamily="Arial"
+                                                   FontSize="20"
+                                                   FontWeight="Bold"
+                                                   Foreground="#CCD5D7" />
+
+                                        <TextBlock Text="Version 2.0.0 · Beta release"
+                                                   FontFamily="Arial"
+                                                   FontSize="14"
+                                                   Foreground="#FFB1B1"
+                                                   Margin="0,6,0,0" />
+
+                                        <TextBlock Text="This application is in beta version and may receive frequent improvements."
+                                                   FontFamily="Arial"
+                                                   FontSize="13"
+                                                   Foreground="#708089"
+                                                   TextWrapping="Wrap"
+                                                   LineHeight="20"
+                                                   Margin="0,10,0,0" />
+
+                                    </StackPanel>
+                                </Border>
+
+                                <Button Style="{StaticResource AboutPrimaryButtonStyle}"
+                                        Content="Check for Updates"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,16,0,0">
+                                    <i:Interaction.Triggers>
+                                        <i:EventTrigger EventName="Click">
+                                            <i:CallMethodAction TargetObject="{Binding RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                MethodName="CheckForUpdates"/>
+                                        </i:EventTrigger>
+                                    </i:Interaction.Triggers>
+                                </Button>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Background="#1D2124"
+                                BorderBrush="#30363B"
+                                BorderThickness="1"
+                                CornerRadius="16"
+                                Padding="18"
+                                Margin="0,16,0,0">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Diagnostics"
+                                                   FontFamily="Arial"
+                                                   FontSize="16"
+                                                   FontWeight="Bold"
+                                                   Foreground="#CCD5D7" />
+
+                                        <TextBlock Text="Enable diagnostic logs while debugging NessStudio behavior."
+                                                   FontFamily="Arial"
+                                                   FontSize="13"
+                                                   Foreground="#708089"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,6,0,0" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <CheckBox x:Name="EnableDebugLogsCheckBox"
+                                          Content="Enable Debug Logs"
+                                          Margin="0,14,0,0"
+                                          Foreground="#CCD5D7"
+                                          FontFamily="Arial"
+                                          FontSize="15"
+                                          Checked="EnableDebugLogsCheckBox_Checked"
+                                          Unchecked="EnableDebugLogsCheckBox_Unchecked" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Background="#1D2124"
+                                BorderBrush="#30363B"
+                                BorderThickness="1"
+                                CornerRadius="16"
+                                Padding="18"
+                                Margin="0,16,0,0">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,14">
+                                    <TextBlock Text="License"
+                                               FontFamily="Arial"
+                                               FontSize="16"
+                                               FontWeight="Bold"
+                                               Foreground="#CCD5D7" />
+
+                                    <Border HorizontalAlignment="Right"
+                                            Background="Transparent"
+                                            BorderBrush="Transparent"
+                                            BorderThickness="1"
+                                            CornerRadius="999"
+                                            Padding="10,4">
+                                        <TextBlock Text="MIT"
+                                                   FontFamily="Arial"
+                                                   FontSize="12"
+                                                   FontWeight="Bold"
+                                                   Foreground="#FFB1B1" />
+                                    </Border>
+                                </Grid>
+
+                                <Border Background="#15181A"
+                                        BorderBrush="#343B40"
+                                        BorderThickness="1"
+                                        CornerRadius="14"
+                                        Padding="14"
+                                        Height="150">
+                                    <ScrollViewer Style="{StaticResource DarkScrollViewerStyle}">
+                                        <TextBlock TextWrapping="Wrap"
+                                                   FontFamily="Consolas"
+                                                   Foreground="#CCD5D7"
+                                                   FontSize="13"
+                                                   LineHeight="19">
 MIT License
 Copyright (c) 2026 Micilini Roll
+
 Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
+of this software and associated documentation files (the &quot;Software&quot;), to deal
 in the Software without restriction, including without limitation the rights
 to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 copies of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
+
 The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software.
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+
+THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-                            </TextBlock>
-                        </ScrollViewer>
-                    </TabItem>
-                </TabControl>
-                <TextBlock Text="Portal Micilini - 2026" FontFamily="Arial" FontSize="14" FontWeight="Light" HorizontalAlignment="Right" Margin="0 20 0 0" Foreground="#CCD5D7" />
-            </StackPanel>
-        </Grid>
-    </materialDesign:Card>
-</Window>
+                                        </TextBlock>
+                                    </ScrollViewer>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <Border Grid.Row="2"
+                        Background="#202427"
+                        BorderBrush="#343B40"
+                        BorderThickness="0,1,0,0"
+                        Padding="24,14">
+                    <Grid>
+                        <TextBlock Text="Portal Micilini - 2026"
+                                   FontFamily="Arial"
+                                   FontSize="13"
+                                   FontWeight="Regular"
+                                   Foreground="#708089"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Left" />
+
+                        <Border HorizontalAlignment="Right"
+                                Style="{StaticResource AboutSecondaryBorderButtonStyle}"
+                                MouseLeftButtonUp="OnCloseIconClicked">
+                            <TextBlock Text="Close"
+                                       Foreground="#CCD5D7"
+                                       FontFamily="Arial"
+                                       FontSize="14"
+                                       FontWeight="Bold"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Center" />
+                        </Border>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+    </Border>
+</Window>

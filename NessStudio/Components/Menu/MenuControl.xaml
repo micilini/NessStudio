@@ -6,40 +6,211 @@
              xmlns:local="clr-namespace:NessStudio.Components.Menu"
              xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
              mc:Ignorable="d" 
-             d:DesignHeight="600" d:DesignWidth="250">
-    <Grid Margin="15">
+             d:DesignHeight="600"
+             d:DesignWidth="250">
+
+    <UserControl.Resources>
+        <Style x:Key="SidebarButtonStyle" TargetType="{x:Type Button}">
+            <Setter Property="Height" Value="52" />
+            <Setter Property="Margin" Value="0,6,0,0" />
+            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="#CCD5D7" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="12"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </Border>
+
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#202427" />
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#343B40" />
+                            </Trigger>
+
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#2A2022" />
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#B33333" />
+                            </Trigger>
+
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.55" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SidebarButtonTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="FontFamily" Value="Arial" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="#CCD5D7" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="12,0,0,0" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="18">
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
+
         <StackPanel Grid.Row="0">
-            <Border BorderBrush="#202C34" BorderThickness="2" Background="Transparent" CornerRadius="6" HorizontalAlignment="Stretch" Padding="3" Height="50" Margin="0 0 0 50">
-                <TextBlock Text="Welcome, to Ness!" VerticalAlignment="Center" HorizontalAlignment="Center" TextWrapping="NoWrap" Foreground="#CCD5D7" FontFamily="Arial" FontSize="16" Margin="0 0 0 0"/>
+            <Border Background="#1D2124"
+                    BorderBrush="#30363B"
+                    BorderThickness="1"
+                    CornerRadius="16"
+                    Padding="16"
+                    Margin="0,0,0,28">
+                <StackPanel>
+                    <Border Width="52"
+                            Height="52"
+                            CornerRadius="16"
+                            HorizontalAlignment="Left"
+                            Background="#2A2022"
+                            BorderBrush="#663131"
+                            BorderThickness="1">
+                        <Image RenderOptions.BitmapScalingMode="HighQuality"
+                               Source="/Assets/Images/logo-nessstudio.png"
+                               Width="34"
+                               Height="34"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                    </Border>
+
+                    <TextBlock Text="Welcome to Ness!"
+                               Foreground="#CCD5D7"
+                               FontFamily="Arial"
+                               FontSize="18"
+                               FontWeight="Bold"
+                               Margin="0,14,0,0" />
+
+                    <TextBlock Text="Create, capture and export your recordings from one place."
+                               Foreground="#708089"
+                               FontFamily="Arial"
+                               FontSize="13"
+                               TextWrapping="Wrap"
+                               LineHeight="19"
+                               Margin="0,7,0,0" />
+                </StackPanel>
             </Border>
-            <Button Command="{Binding NewProjectCommand}" Cursor="No" Style="{StaticResource MaterialDesignFlatButton}" HorizontalContentAlignment="Left" Padding="5 0 0 0" Foreground="{DynamicResource PrimaryHueLightForegroundBrush}" materialDesign:ButtonAssist.CornerRadius="6" Width="Auto" Height="50" materialDesign:RippleAssist.Feedback="White" Margin="0 5 0 0">
-                <WrapPanel HorizontalAlignment="Left" Width="Auto">
-                    <Image RenderOptions.BitmapScalingMode="HighQuality" Source="/Assets/Images/file-icon.png" VerticalAlignment="Center" Margin="0 0 20 0" Width="35" Height="35" />
-                    <TextBlock FontSize="16" FontFamily="Arial" FontWeight="Bold" Margin="-10 9 0 0" Foreground="#e74c3c">New Project</TextBlock>
-                </WrapPanel>
+
+            <TextBlock Text="Workspace"
+                       Foreground="#708089"
+                       FontFamily="Arial"
+                       FontSize="12"
+                       FontWeight="Bold"
+                       Margin="4,0,0,8" />
+
+            <Button Command="{Binding NewProjectCommand}"
+                    Style="{StaticResource SidebarButtonStyle}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Image Grid.Column="0"
+                           RenderOptions.BitmapScalingMode="HighQuality"
+                           Source="/Assets/Images/file-icon.png"
+                           Width="28"
+                           Height="28"
+                           VerticalAlignment="Center" />
+
+                    <TextBlock Grid.Column="1"
+                               Text="New Project"
+                               Style="{StaticResource SidebarButtonTextStyle}"
+                               Foreground="#E74C3C" />
+                </Grid>
             </Button>
-            <Button Command="{Binding OpenProjectCommand}" Cursor="No" Style="{StaticResource MaterialDesignFlatButton}" HorizontalContentAlignment="Left" Padding="5 0 0 0" Foreground="{DynamicResource PrimaryHueLightForegroundBrush}" materialDesign:ButtonAssist.CornerRadius="6" Width="Auto" Height="50" materialDesign:RippleAssist.Feedback="White" Margin="0 5 0 0">
-                <WrapPanel HorizontalAlignment="Left" Width="Auto">
-                    <Image RenderOptions.BitmapScalingMode="HighQuality" Source="/Assets/Images/open-icon.png" VerticalAlignment="Center" Margin="0 0 20 0" Width="35" Height="35" />
-                    <TextBlock FontSize="16" FontFamily="Arial" FontWeight="Bold" Margin="-10 9 0 0" Foreground="#e74c3c">Open Project</TextBlock>
-                </WrapPanel>
+
+            <Button Command="{Binding OpenProjectCommand}"
+                    Style="{StaticResource SidebarButtonStyle}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Image Grid.Column="0"
+                           RenderOptions.BitmapScalingMode="HighQuality"
+                           Source="/Assets/Images/open-icon.png"
+                           Width="28"
+                           Height="28"
+                           VerticalAlignment="Center" />
+
+                    <TextBlock Grid.Column="1"
+                               Text="Open Project"
+                               Style="{StaticResource SidebarButtonTextStyle}"
+                               Foreground="#E74C3C" />
+                </Grid>
             </Button>
-            <Button Command="{Binding StartRecordingCommand}" Style="{StaticResource MaterialDesignFlatButton}" HorizontalContentAlignment="Left" Padding="5 0 0 0" Foreground="{DynamicResource PrimaryHueLightForegroundBrush}" materialDesign:ButtonAssist.CornerRadius="6" Width="Auto" Height="50" materialDesign:RippleAssist.Feedback="White" Margin="0 5 0 0">
-                <WrapPanel HorizontalAlignment="Left" Width="Auto">
-                    <Image RenderOptions.BitmapScalingMode="HighQuality" Source="/Assets/Images/record-icon.png" VerticalAlignment="Center" Margin="0 0 20 0" Width="35" Height="35" />
-                    <TextBlock FontSize="16" FontFamily="Arial" FontWeight="Bold" Margin="-10 9 0 0" Foreground="#CCD5D7">Start Recording</TextBlock>
-                </WrapPanel>
+
+            <Button Command="{Binding StartRecordingCommand}"
+                    Style="{StaticResource SidebarButtonStyle}"
+                    Margin="0,14,0,0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Image Grid.Column="0"
+                           RenderOptions.BitmapScalingMode="HighQuality"
+                           Source="/Assets/Images/record-icon.png"
+                           Width="28"
+                           Height="28"
+                           VerticalAlignment="Center" />
+
+                    <TextBlock Grid.Column="1"
+                               Text="Start Recording"
+                               Style="{StaticResource SidebarButtonTextStyle}" />
+                </Grid>
             </Button>
         </StackPanel>
-        <Button Command="{Binding AboutAppCommand}" Grid.Row="1" Style="{StaticResource MaterialDesignFlatButton}" VerticalAlignment="Bottom" HorizontalContentAlignment="Left" Padding="5 0 0 0" Foreground="{DynamicResource PrimaryHueLightForegroundBrush}" materialDesign:ButtonAssist.CornerRadius="6" Width="Auto" Height="50" materialDesign:RippleAssist.Feedback="White" Margin="0 5 0 0">
-            <WrapPanel HorizontalAlignment="Left" Width="Auto">
-                <Image RenderOptions.BitmapScalingMode="HighQuality" Source="/Assets/Images/info-icon.png" VerticalAlignment="Center" Margin="0 0 20 0" Width="35" Height="35" />
-                <TextBlock FontSize="16" FontFamily="Arial" FontWeight="Bold" Margin="-10 9 0 0" Foreground="#CCD5D7">About Application</TextBlock>
-            </WrapPanel>
-        </Button>
+
+        <StackPanel Grid.Row="1">
+            <Border Height="1"
+                    Background="#2A3035"
+                    Margin="0,0,0,12" />
+
+            <Button Command="{Binding AboutAppCommand}"
+                    Style="{StaticResource SidebarButtonStyle}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Image Grid.Column="0"
+                           RenderOptions.BitmapScalingMode="HighQuality"
+                           Source="/Assets/Images/info-icon.png"
+                           Width="28"
+                           Height="28"
+                           VerticalAlignment="Center" />
+
+                    <TextBlock Grid.Column="1"
+                               Text="About Application"
+                               Style="{StaticResource SidebarButtonTextStyle}" />
+                </Grid>
+            </Button>
+        </StackPanel>
     </Grid>
-</UserControl>
+</UserControl>

@@ -25,7 +25,7 @@ namespace NessStudio.View.AboutScreen
         }
         public async void CheckForUpdates()
         {
-            string url = "https://micilini.com/apps/ness-studio";
+            string url = "https://micilini.com/apps/nessstudio";
             try
             {
                 var psi = new System.Diagnostics.ProcessStartInfo

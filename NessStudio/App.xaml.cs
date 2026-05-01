@@ -12,7 +12,7 @@ namespace NessStudio
         private static Mutex _appMutex;
         public string KeyDatabase = string.Empty;
         public string DatabaseFileName = "nesstudio.dll";
-        public string ApplicationVersion = "1.1.0";
+        public string ApplicationVersion = "2.0.0";
         public string ApplicationIdentifier { get; set; }
         public string AppLanguage { get; set; }
         public bool DebugLogsEnabled { get; set; } = false;

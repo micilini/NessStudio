@@ -4,38 +4,332 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:local="clr-namespace:NessStudio.Components.RecentProjects"
-             mc:Ignorable="d"
              xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
-             d:DesignHeight="706" d:DesignWidth="774">
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Style="{StaticResource MaterialDesignScrollViewer}" Foreground="White" >
-        <Grid Margin="25 40">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="80" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
-            <StackPanel Grid.Row="0">
-                <TextBlock Text="Recent Recodings" FontFamily="Arial" FontWeight="Bold" FontSize="24" Foreground="#CCD5D7" />
-                <TextBlock Text="Review your most recent screen recordings and manage them with ease." TextWrapping="Wrap" FontFamily="Arial" FontWeight="Normal" FontSize="18" Foreground="#CCD5D7" Margin="0 12 0 0" />
-            </StackPanel>
-            <StackPanel Grid.Row="1" >
-                <StackPanel Visibility="{Binding IsLoadingProjectBlockVisible, Converter={StaticResource BoolToVis}, Mode=OneWay}" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,40,0,0">
-                    <ProgressBar IsIndeterminate="True" Width="140" Height="6" BorderBrush="Transparent" />
-                    <TextBlock Text="Loading Projects"  Margin="0,12,0,0" Foreground="#708089" FontSize="16" HorizontalAlignment="Center"/>
-                </StackPanel>
-                <StackPanel Visibility="{Binding IsNoneProjectBlockVisible, Converter={StaticResource BoolToVis}, Mode=OneWay}" Margin="0 40 0 0">
-                    <Image RenderOptions.BitmapScalingMode="HighQuality" Source="/Assets/Images/sad-icon.png" VerticalAlignment="Center" Margin="0 0 20 0" Width="180" Height="180" Opacity="0.4" />
-                    <TextBlock HorizontalAlignment="Center" FontSize="18" FontFamily="Arial" FontWeight="Bold" Margin="-10 9 0 0" TextWrapping="Wrap" Foreground="#CCD5D7">Looks like you haven’t created any recordings yet.</TextBlock>
-                </StackPanel>
-                <ScrollViewer Visibility="{Binding IsProjectBlockVisible, Converter={StaticResource BoolToVis}, Mode=OneWay}"
-                      VerticalScrollBarVisibility="Auto" HorizontalAlignment="Left" VerticalAlignment="Top">
-                    <StackPanel>
-                        <WrapPanel x:Name="ProjectsWrapPanel" Margin="8" HorizontalAlignment="Left" VerticalAlignment="Top"/>
+             mc:Ignorable="d"
+             d:DesignHeight="706"
+             d:DesignWidth="774">
+
+    <UserControl.Resources>
+        <Style x:Key="DarkScrollBarThumbStyle" TargetType="{x:Type Thumb}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Thumb}">
+                        <Border x:Name="ThumbBorder"
+                                Width="8"
+                                HorizontalAlignment="Center"
+                                Background="#3A4248"
+                                CornerRadius="8"
+                                Opacity="0.92" />
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ThumbBorder" Property="Background" Value="#4B555C" />
+                                <Setter TargetName="ThumbBorder" Property="Width" Value="9" />
+                            </Trigger>
+                            <Trigger Property="IsDragging" Value="True">
+                                <Setter TargetName="ThumbBorder" Property="Background" Value="#B33333" />
+                                <Setter TargetName="ThumbBorder" Property="Width" Value="9" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DarkScrollBarRepeatButtonStyle" TargetType="{x:Type RepeatButton}">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type RepeatButton}">
+                        <Border Background="Transparent" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DarkVerticalScrollBarStyle" TargetType="{x:Type ScrollBar}">
+            <Setter Property="Width" Value="14" />
+            <Setter Property="Margin" Value="12,0,0,0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ScrollBar}">
+                        <Grid Width="{TemplateBinding Width}"
+                              Background="Transparent">
+                            <Border Width="10"
+                                    HorizontalAlignment="Center"
+                                    Background="#15181A"
+                                    CornerRadius="8"
+                                    Opacity="0.95" />
+
+                            <Track x:Name="PART_Track"
+                                   IsDirectionReversed="True">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="{x:Static ScrollBar.PageUpCommand}"
+                                                  Style="{StaticResource DarkScrollBarRepeatButtonStyle}" />
+                                </Track.DecreaseRepeatButton>
+
+                                <Track.Thumb>
+                                    <Thumb Style="{StaticResource DarkScrollBarThumbStyle}" />
+                                </Track.Thumb>
+
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="{x:Static ScrollBar.PageDownCommand}"
+                                                  Style="{StaticResource DarkScrollBarRepeatButtonStyle}" />
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DarkScrollViewerStyle" TargetType="{x:Type ScrollViewer}">
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+            <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="PanningMode" Value="VerticalOnly" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ScrollViewer}">
+                        <Grid Background="Transparent">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="28" />
+                            </Grid.ColumnDefinitions>
+
+                            <ScrollContentPresenter x:Name="PART_ScrollContentPresenter"
+                                                    Grid.Column="0"
+                                                    Content="{TemplateBinding Content}"
+                                                    ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                    ContentStringFormat="{TemplateBinding ContentStringFormat}"
+                                                    CanContentScroll="{TemplateBinding CanContentScroll}"
+                                                    Margin="0" />
+
+                            <ScrollBar x:Name="PART_VerticalScrollBar"
+                                       Grid.Column="1"
+                                       Style="{StaticResource DarkVerticalScrollBarStyle}"
+                                       Orientation="Vertical"
+                                       Minimum="0"
+                                       Maximum="{TemplateBinding ScrollableHeight}"
+                                       ViewportSize="{TemplateBinding ViewportHeight}"
+                                       Value="{Binding VerticalOffset, RelativeSource={RelativeSource TemplatedParent}, Mode=OneWay}"
+                                       Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PrimaryActionButtonStyle" TargetType="{x:Type Button}">
+            <Setter Property="Height" Value="42" />
+            <Setter Property="Padding" Value="22,0" />
+            <Setter Property="Background" Value="#FF3131" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="FontFamily" Value="Arial" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="12"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#FF4545" />
+                            </Trigger>
+
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#B33333" />
+                            </Trigger>
+
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.55" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Background="Transparent">
+        <ScrollViewer Style="{StaticResource DarkScrollViewerStyle}">
+            <Grid Margin="34,36,34,34">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="24" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="32" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0"
+                        Background="#1D2124"
+                        BorderBrush="#30363B"
+                        BorderThickness="1"
+                        CornerRadius="18"
+                        Padding="24">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Recent Recordings"
+                                       FontFamily="Arial"
+                                       FontWeight="Bold"
+                                       FontSize="28"
+                                       Foreground="#CCD5D7" />
+
+                            <TextBlock Text="Review your most recent screen recordings and manage them with ease."
+                                       TextWrapping="Wrap"
+                                       FontFamily="Arial"
+                                       FontWeight="Normal"
+                                       FontSize="16"
+                                       Foreground="#708089"
+                                       Margin="0,10,0,0"
+                                       LineHeight="23" />
+                        </StackPanel>
+
+                        <Border Grid.Column="1"
+                                Height="34"
+                                CornerRadius="999"
+                                Background="Transparent"
+                                BorderBrush="Transparent"
+                                BorderThickness="1"
+                                Padding="14,0"
+                                VerticalAlignment="Top"
+                                Margin="18,0,0,0">
+                            <TextBlock Text="Library"
+                                       Foreground="#FFB1B1"
+                                       FontFamily="Arial"
+                                       FontSize="13"
+                                       FontWeight="Bold"
+                                       VerticalAlignment="Center" />
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <Grid Grid.Row="2">
+                    <StackPanel Visibility="{Binding IsLoadingProjectBlockVisible, Converter={StaticResource BoolToVis}, Mode=OneWay}"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Margin="0,42,0,0">
+                        <Border Width="260"
+                                Background="#1D2124"
+                                BorderBrush="#30363B"
+                                BorderThickness="1"
+                                CornerRadius="18"
+                                Padding="26">
+                            <StackPanel>
+                                <ProgressBar IsIndeterminate="True"
+                                             Width="150"
+                                             Height="6"
+                                             BorderBrush="Transparent"
+                                             HorizontalAlignment="Center" />
+
+                                <TextBlock Text="Loading projects"
+                                           Margin="0,14,0,0"
+                                           Foreground="#708089"
+                                           FontFamily="Arial"
+                                           FontSize="15"
+                                           HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
-                </ScrollViewer>
-                <StackPanel Visibility="{Binding IsProjectBlockVisible, Converter={StaticResource BoolToVis}, Mode=OneWay}">
-                    <Button Command="{Binding OpenFolderRecordingCommand}" Content="More Recordings" FontFamily="Arial" FontSize="18" Background="red" Foreground="white" Width="220" Height="40" BorderBrush="Transparent" Margin="0 50 0 0" />
-                </StackPanel>
-            </StackPanel>
-        </Grid>
-    </ScrollViewer>
-</UserControl>
+
+                    <Border Visibility="{Binding IsNoneProjectBlockVisible, Converter={StaticResource BoolToVis}, Mode=OneWay}"
+                            Background="#1D2124"
+                            BorderBrush="#30363B"
+                            BorderThickness="1"
+                            CornerRadius="20"
+                            Padding="34"
+                            Margin="0,12,0,0">
+                        <StackPanel HorizontalAlignment="Center">
+                            <Image RenderOptions.BitmapScalingMode="HighQuality"
+                                   Source="/Assets/Images/sad-icon.png"
+                                   VerticalAlignment="Center"
+                                   Width="160"
+                                   Height="160"
+                                   Opacity="0.35" />
+
+                            <TextBlock HorizontalAlignment="Center"
+                                       FontSize="20"
+                                       FontFamily="Arial"
+                                       FontWeight="Bold"
+                                       TextWrapping="Wrap"
+                                       Foreground="#CCD5D7"
+                                       Text="Looks like you haven’t created any recordings yet."
+                                       Margin="0,18,0,0" />
+
+                            <TextBlock HorizontalAlignment="Center"
+                                       FontSize="14"
+                                       FontFamily="Arial"
+                                       TextWrapping="Wrap"
+                                       Foreground="#708089"
+                                       Text="Start a new recording and it will appear here automatically."
+                                       Margin="0,8,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <WrapPanel x:Name="ProjectsWrapPanel"
+                               Visibility="{Binding IsProjectBlockVisible, Converter={StaticResource BoolToVis}, Mode=OneWay}"
+                               Margin="0"
+                               HorizontalAlignment="Left"
+                               VerticalAlignment="Top" />
+                </Grid>
+
+                <Border Grid.Row="4"
+                        Visibility="{Binding IsProjectBlockVisible, Converter={StaticResource BoolToVis}, Mode=OneWay}"
+                        Background="#1D2124"
+                        BorderBrush="#30363B"
+                        BorderThickness="1"
+                        CornerRadius="16"
+                        Padding="18">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0"
+                                    VerticalAlignment="Center">
+                            <TextBlock Text="Need older recordings?"
+                                       Foreground="#CCD5D7"
+                                       FontFamily="Arial"
+                                       FontSize="15"
+                                       FontWeight="Bold" />
+
+                            <TextBlock Text="Open the full recordings folder to browse everything saved by NessStudio."
+                                       Foreground="#708089"
+                                       FontFamily="Arial"
+                                       FontSize="13"
+                                       Margin="0,5,0,0"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <Button Grid.Column="1"
+                                Command="{Binding OpenFolderRecordingCommand}"
+                                Content="More Recordings"
+                                Style="{StaticResource PrimaryActionButtonStyle}"
+                                Margin="22,0,0,0"
+                                VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+            </Grid>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

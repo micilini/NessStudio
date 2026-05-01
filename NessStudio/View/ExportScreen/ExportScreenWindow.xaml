@@ -295,15 +295,32 @@
         </Style>
     </Window.Resources>
 
-    <Border Width="980"
+    <Border x:Name="ExportWindowOuterBorder"
+            Width="980"
             Height="720"
             CornerRadius="18"
-            BorderBrush="#B33333"
-            BorderThickness="1"
-            Background="#23272A"
-            SnapsToDevicePixels="True">
-        <Border Background="#23272A" CornerRadius="18">
-            <Grid>
+            Background="#B33333"
+            SnapsToDevicePixels="True"
+            ClipToBounds="True">
+        <Border x:Name="ExportWindowInnerBorder"
+                Margin="1"
+                CornerRadius="17"
+                Background="#23272A"
+                SnapsToDevicePixels="True"
+                ClipToBounds="True">
+            <Grid x:Name="ExportWindowClipGrid"
+                  ClipToBounds="True">
+                <Grid.OpacityMask>
+                    <VisualBrush>
+                        <VisualBrush.Visual>
+                            <Border Width="{Binding ActualWidth, ElementName=ExportWindowClipGrid}"
+                                    Height="{Binding ActualHeight, ElementName=ExportWindowClipGrid}"
+                                    CornerRadius="17"
+                                    Background="Black" />
+                        </VisualBrush.Visual>
+                    </VisualBrush>
+                </Grid.OpacityMask>
+
                 <Grid.RowDefinitions>
                     <RowDefinition Height="86" />
                     <RowDefinition Height="*" />

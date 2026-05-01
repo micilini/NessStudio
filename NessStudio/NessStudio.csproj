@@ -9,6 +9,10 @@
 	<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 	<SupportedOSPlatformVersion>10.0.17134.0</SupportedOSPlatformVersion>
 	<GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+	  <Version>2.0.0-beta</Version>
+	  <AssemblyVersion>2.0.0.0</AssemblyVersion>
+	  <FileVersion>2.0.0.0</FileVersion>
+	  <Product>NessStudio</Product>
   </PropertyGroup>
   <ItemGroup>
     <None Remove="Assets\Images\close-icon-white.png" />
