@@ -88,17 +88,20 @@ namespace NessStudio.ViewModel.Helpers
 
             _seg.Start();
 
-            try
+            if (_targets.Screen != null)
             {
-                DebugLog.Write("[RecordAssist] StartScreenSegment()");
-                StartScreenSegment();
-                DebugLog.Write("[RecordAssist] StartScreenSegment() OK");
-            }
-            catch (Exception ex)
-            {
-                DebugLog.Write("[RecordAssist] StartScreenSegment() ERROR:\n" + ex);
-                _seg.TryStop();
-                throw new InvalidOperationException("Screen capture failed to start.", ex);
+                try
+                {
+                    DebugLog.Write("[RecordAssist] StartScreenSegment()");
+                    StartScreenSegment();
+                    DebugLog.Write("[RecordAssist] StartScreenSegment() OK");
+                }
+                catch (Exception ex)
+                {
+                    DebugLog.Write("[RecordAssist] StartScreenSegment() ERROR:\n" + ex);
+                    _seg.TryStop();
+                    throw new InvalidOperationException("Screen capture failed to start.", ex);
+                }
             }
 
             try
@@ -155,16 +158,19 @@ namespace NessStudio.ViewModel.Helpers
             DebugLog.Write("[RecordAssist] PauseAsync begin");
             _seg.TryPause();
 
-            try
+            if (_targets.Screen != null)
             {
-                DebugLog.Write("[RecordAssist] PauseAsync -> StopScreenSegment begin");
-                await Task.Run(() => StopScreenSegment());
-                DebugLog.Write("[RecordAssist] PauseAsync -> StopScreenSegment end");
-            }
-            catch (Exception ex)
-            {
-                DebugLog.Write("[RecordAssist] PauseAsync -> StopScreenSegment ERROR:\n" + ex);
-                throw;
+                try
+                {
+                    DebugLog.Write("[RecordAssist] PauseAsync -> StopScreenSegment begin");
+                    await Task.Run(() => StopScreenSegment());
+                    DebugLog.Write("[RecordAssist] PauseAsync -> StopScreenSegment end");
+                }
+                catch (Exception ex)
+                {
+                    DebugLog.Write("[RecordAssist] PauseAsync -> StopScreenSegment ERROR:\n" + ex);
+                    throw;
+                }
             }
 
             try
@@ -216,21 +222,33 @@ namespace NessStudio.ViewModel.Helpers
             RecordingPerfProbe.Mark("resume-begin", $"segment={_seg.SegmentIndex}");
             _seg.TryResume();
 
-            RecordingPerfProbe.Mark("resume-screen-begin", $"segment={_seg.SegmentIndex}");
-            StartScreenSegment();
-            RecordingPerfProbe.Mark("resume-screen-end", $"segment={_seg.SegmentIndex}");
+            if (_targets.Screen != null)
+            {
+                RecordingPerfProbe.Mark("resume-screen-begin", $"segment={_seg.SegmentIndex}");
+                StartScreenSegment();
+                RecordingPerfProbe.Mark("resume-screen-end", $"segment={_seg.SegmentIndex}");
+            }
 
-            RecordingPerfProbe.Mark("resume-webcam-begin", $"segment={_seg.SegmentIndex}");
-            await StartWebcamSegmentAsync();
-            RecordingPerfProbe.Mark("resume-webcam-end", $"segment={_seg.SegmentIndex}");
+            if (!string.IsNullOrWhiteSpace(_targets.WebcamName))
+            {
+                RecordingPerfProbe.Mark("resume-webcam-begin", $"segment={_seg.SegmentIndex}");
+                await StartWebcamSegmentAsync();
+                RecordingPerfProbe.Mark("resume-webcam-end", $"segment={_seg.SegmentIndex}");
+            }
 
-            RecordingPerfProbe.Mark("resume-mic-begin", $"segment={_seg.SegmentIndex}");
-            StartMicSegment();
-            RecordingPerfProbe.Mark("resume-mic-end", $"segment={_seg.SegmentIndex}");
+            if (!string.IsNullOrWhiteSpace(_targets.MicDeviceId))
+            {
+                RecordingPerfProbe.Mark("resume-mic-begin", $"segment={_seg.SegmentIndex}");
+                StartMicSegment();
+                RecordingPerfProbe.Mark("resume-mic-end", $"segment={_seg.SegmentIndex}");
+            }
 
-            RecordingPerfProbe.Mark("resume-loopback-begin", $"segment={_seg.SegmentIndex}");
-            StartLoopbackSegment();
-            RecordingPerfProbe.Mark("resume-loopback-end", $"segment={_seg.SegmentIndex}");
+            if (!string.IsNullOrWhiteSpace(_targets.LoopbackDeviceId))
+            {
+                RecordingPerfProbe.Mark("resume-loopback-begin", $"segment={_seg.SegmentIndex}");
+                StartLoopbackSegment();
+                RecordingPerfProbe.Mark("resume-loopback-end", $"segment={_seg.SegmentIndex}");
+            }
 
             DebugLog.Write("[RecordAssist] ResumeAsync end");
             RecordingPerfProbe.Mark("resume-end", $"segment={_seg.SegmentIndex}");
@@ -243,10 +261,12 @@ namespace NessStudio.ViewModel.Helpers
 
             _seg.TryStop();
 
-            StopScreenSegment();
-
-            try { _wgcScreen?.ReleaseSession(); } catch { }
-            _wgcScreen = null;
+            if (_targets.Screen != null)
+            {
+                StopScreenSegment();
+                try { _wgcScreen?.ReleaseSession(); } catch { }
+                _wgcScreen = null;
+            }
 
             await StopWebcamSegmentAsync();
             StopMicSegment();
