@@ -56,6 +56,11 @@ namespace NessStudio.ViewModel.Helpers
             _region = new ScreenRegion(targets.Screen, cropPx);
         }
 
+        private bool ShouldCaptureScreen()
+        {
+            return _region != null && _region.ShouldCapture;
+        }
+
         public async Task PrepareAsync()
         {
             if (string.IsNullOrWhiteSpace(_targets.WebcamName))
@@ -81,14 +86,14 @@ namespace NessStudio.ViewModel.Helpers
             DebugLog.Write(
                 $"[RecordAssist] StartAsync begin | " +
                 $"segment={_seg.SegmentIndex} | " +
-                $"screen={_targets.Screen != null} | " +
+                $"screen={ShouldCaptureScreen()} | " +
                 $"webcam={!string.IsNullOrWhiteSpace(_targets.WebcamName)} | " +
                 $"mic={!string.IsNullOrWhiteSpace(_targets.MicDeviceId)} | " +
                 $"system={!string.IsNullOrWhiteSpace(_targets.LoopbackDeviceId)}");
 
             _seg.Start();
 
-            if (_targets.Screen != null)
+            if (ShouldCaptureScreen())
             {
                 try
                 {
@@ -158,7 +163,7 @@ namespace NessStudio.ViewModel.Helpers
             DebugLog.Write("[RecordAssist] PauseAsync begin");
             _seg.TryPause();
 
-            if (_targets.Screen != null)
+            if (ShouldCaptureScreen())
             {
                 try
                 {
@@ -222,7 +227,7 @@ namespace NessStudio.ViewModel.Helpers
             RecordingPerfProbe.Mark("resume-begin", $"segment={_seg.SegmentIndex}");
             _seg.TryResume();
 
-            if (_targets.Screen != null)
+            if (ShouldCaptureScreen())
             {
                 RecordingPerfProbe.Mark("resume-screen-begin", $"segment={_seg.SegmentIndex}");
                 StartScreenSegment();
@@ -261,7 +266,7 @@ namespace NessStudio.ViewModel.Helpers
 
             _seg.TryStop();
 
-            if (_targets.Screen != null)
+            if (ShouldCaptureScreen())
             {
                 StopScreenSegment();
                 try { _wgcScreen?.ReleaseSession(); } catch { }

@@ -125,12 +125,12 @@ The old P3/P4 status list has been consolidated. The current roadmap is focused 
 | P3.6 | ✅ Done | Manifest updated for current track structure |
 | P5.1 | ✅ Done | Screen, webcam, microphone, and system audio can work as independent channels |
 | P5.2 | ✅ Done | Recording preview now prefers `Screen.File`, then falls back to `Webcam.File` through `manifest.json` |
+| P5.3 | ✅ Done | Draw Area recordings now show a visual capture overlay during recording, hide it on pause, restore it on resume, and close it on stop |
 
 ### Still Missing
 
 | Phase | Status | Goal |
 |---|---|---|
-| P5.3 | 📋 Next | Add a visual overlay for the selected Draw Area during recording |
 | P5.4 | 📋 Planned | Add export flow for final `.mp4` / `.mkv` files using FFmpeg |
 | P4.x | 📋 Optional polish | Keep-alive and warmup improvements for WGC, webcam, and resume behavior |
 
@@ -139,7 +139,7 @@ The old P3/P4 status list has been consolidated. The current roadmap is focused 
 | Limitation | Status |
 |---|---|
 | Audio-only recordings do not generate a visual preview | Expected behavior |
-| Draw Area does not yet show a dedicated capture-region overlay while recording | Planned in P5.3 |
+| Draw Area overlay exclusion depends on Windows support for `WDA_EXCLUDEFROMCAPTURE` | Expected platform-dependent behavior |
 | Final export/merge workflow is not available yet | Planned in P5.4 |
 | Some pause/resume visual polish may still be improved | Optional P4 work |
 

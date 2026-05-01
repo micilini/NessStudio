@@ -52,6 +52,8 @@ namespace NessStudio.ViewModel
         private bool _stopStarted = false;
         private bool _isSavingRecording = false;
         private bool _suppressSelectionHandler = false;
+        private CaptureOverlayWindow? _captureOverlayWindow;
+        private System.Windows.Rect? _activeDrawAreaOverlayCrop;
         public bool IsScreenEnabled { get => _isScreenEnabled; set { _isScreenEnabled = value; OnPropertyChanged(nameof(IsScreenEnabled)); if (_isLoaded) UpdateScreenPreviewRunning(); DrawAreaInfoText = string.Empty;IsDrawAreaInfoVisible = false; SelectPrimaryScreen(); } }
         public bool IsWebcamEnabled
         {
@@ -636,6 +638,8 @@ namespace NessStudio.ViewModel
                 DebugLog.Write("[SAVEUI] close request ignored while saving");
                 return;
             }
+
+            ClearDrawAreaOverlay();
             StopScreenPreview();
             StopWebcamPreview();
 
@@ -1083,6 +1087,124 @@ namespace NessStudio.ViewModel
                     break;
             }
         }
+
+        private void ShowDrawAreaOverlay(System.Windows.Rect crop)
+        {
+            try
+            {
+                _activeDrawAreaOverlayCrop = crop;
+
+                CloseDrawAreaOverlayWindow();
+
+                _captureOverlayWindow = new CaptureOverlayWindow(crop)
+                {
+                    Owner = RecordingScreenWindow,
+                    ShowInTaskbar = false,
+                    WindowStartupLocation = WindowStartupLocation.Manual
+                };
+
+                _captureOverlayWindow.Show();
+
+                DebugLog.Write($"[VM] draw area overlay shown | crop={crop}");
+            }
+            catch (Exception ex)
+            {
+                DebugLog.Write("[VM] draw area overlay show ERROR:\n" + ex);
+                _captureOverlayWindow = null;
+            }
+        }
+
+        private void RestoreDrawAreaOverlayIfNeeded()
+        {
+            if (_activeDrawAreaOverlayCrop.HasValue)
+                ShowDrawAreaOverlay(_activeDrawAreaOverlayCrop.Value);
+        }
+
+        private void CloseDrawAreaOverlayWindow()
+        {
+            try
+            {
+                if (_captureOverlayWindow != null)
+                {
+                    _captureOverlayWindow.Close();
+                    DebugLog.Write("[VM] draw area overlay closed");
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugLog.Write("[VM] draw area overlay close ERROR:\n" + ex);
+            }
+            finally
+            {
+                _captureOverlayWindow = null;
+            }
+        }
+
+        private void ClearDrawAreaOverlay()
+        {
+            CloseDrawAreaOverlayWindow();
+            _activeDrawAreaOverlayCrop = null;
+        }
+
+        private Screen? ResolveScreenTargetForRecording(bool isDrawArea, System.Windows.Rect? crop)
+        {
+            if (!IsScreenEnabled)
+                return null;
+
+            if (isDrawArea)
+            {
+                if (!crop.HasValue)
+                    return null;
+
+                var screenFromCrop = FindSingleScreenContainingCrop(crop.Value);
+
+                if (screenFromCrop != null)
+                {
+                    DebugLog.Write(
+                        $"[VM] draw area screen target resolved | " +
+                        $"device={screenFromCrop.DeviceName} | " +
+                        $"bounds={screenFromCrop.Bounds} | " +
+                        $"crop={crop.Value}");
+
+                    return screenFromCrop;
+                }
+
+                DebugLog.Write(
+                    $"[VM] draw area screen target invalid | " +
+                    $"crop spans multiple monitors or is outside available screens | crop={crop.Value}");
+
+                return null;
+            }
+
+            return SelectedScreen;
+        }
+
+        private Screen? FindSingleScreenContainingCrop(System.Windows.Rect crop)
+        {
+            var cropRect = ToGdiRectangle(crop);
+
+            foreach (var screen in Screen.AllScreens)
+            {
+                if (screen.Bounds.Contains(cropRect))
+                    return screen;
+            }
+
+            return null;
+        }
+
+        private static System.Drawing.Rectangle ToGdiRectangle(System.Windows.Rect crop)
+        {
+            int left = (int)Math.Floor(Math.Min(crop.Left, crop.Right));
+            int top = (int)Math.Floor(Math.Min(crop.Top, crop.Bottom));
+            int right = (int)Math.Ceiling(Math.Max(crop.Left, crop.Right));
+            int bottom = (int)Math.Ceiling(Math.Max(crop.Top, crop.Bottom));
+
+            int width = Math.Max(1, right - left);
+            int height = Math.Max(1, bottom - top);
+
+            return new System.Drawing.Rectangle(left, top, width, height);
+        }
+
         private async void BtnRec_Click()
         {
             if (_isRecording) return;
@@ -1103,6 +1225,41 @@ namespace NessStudio.ViewModel
                 return;
             }
 
+            System.Windows.Rect? crop = isDrawArea ? _lastDrawArea.Value : (System.Windows.Rect?)null;
+            Screen? screen = ResolveScreenTargetForRecording(isDrawArea, crop);
+
+            if (isDrawArea && screen == null)
+            {
+                IsCountdownVisible = false;
+                IsRecButtonVisible = true;
+                IsEditEnabled = true;
+
+                System.Windows.MessageBox.Show(
+                    "The selected draw area spans multiple monitors or is outside the selected screen.\nPlease select an area inside a single monitor.",
+                    "Recording",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning
+                );
+
+                return;
+            }
+
+            if (IsScreenEnabled && screen == null)
+            {
+                IsCountdownVisible = false;
+                IsRecButtonVisible = true;
+                IsEditEnabled = true;
+
+                System.Windows.MessageBox.Show(
+                    "Could not resolve a valid screen target. Please select a screen or a draw area again.",
+                    "Recording",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning
+                );
+
+                return;
+            }
+
             string outDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
                 "NessStudio",
@@ -1113,7 +1270,6 @@ namespace NessStudio.ViewModel
             OutDirFolder = outDir;
 
             var paths = new NessStudio.Models.RecordingOutputPaths(outDir);
-            var screen = IsScreenEnabled ? SelectedScreen : null;
 
             try
             {
@@ -1130,7 +1286,7 @@ namespace NessStudio.ViewModel
                     webcamName: (IsWebcamEnabled && SelectedWebcam != null) ? SelectedWebcam.Name : null,
                     micDeviceId: (IsMicrophoneEnabled && SelectedMicrophone != null) ? SelectedMicrophone.ID : null,
                     loopbackDeviceId: (IsSystemAudioEnabled && SelectedRenderLoopback != null) ? SelectedRenderLoopback.ID : null,
-                    displayFriendlyName: (SelectedScreen != null) ? GetDisplayFriendlyName(SelectedScreen.DeviceName) : null
+                    displayFriendlyName: (screen != null) ? GetDisplayFriendlyName(screen.DeviceName) : null
                 );
 
                 if (!selection.AnyAudio && !selection.AnyVideo && !IsScreenEnabled && !isDrawArea)
@@ -1149,7 +1305,6 @@ namespace NessStudio.ViewModel
                 }
 
                 var targets = selection.BuildTargets(screen);
-                System.Windows.Rect? crop = isDrawArea ? _lastDrawArea.Value : (System.Windows.Rect?)null;
 
                 DebugLog.Write($"[VM] Creating recorder | outDir={outDir} | crop={(crop.HasValue ? crop.Value.ToString() : "null")}");
                 _rec = RecorderEngineFactory.Create(paths, targets, crop, runtimeOptions);
@@ -1201,8 +1356,12 @@ namespace NessStudio.ViewModel
                 DebugLog.Write("[VM] Calling _rec.StartAsync()");
                 RecordingPerfProbe.Mark("recording-start-dispatch");
                 await _rec.StartAsync();
+
                 DebugLog.Write("[VM] _rec.StartAsync() succeeded");
                 RecordingPerfProbe.Mark("recording-start-succeeded");
+
+                if (isDrawArea && crop.HasValue)
+                    ShowDrawAreaOverlay(crop.Value);
 
                 await DisableUiPreviewsForActiveRecordingAsync();
 
@@ -1223,6 +1382,7 @@ namespace NessStudio.ViewModel
                 _elapsed = TimeSpan.Zero;
 
                 ResetUiPreviewSuppression();
+                ClearDrawAreaOverlay();
 
                 IsCountdownVisible = false;
                 CountdownText = string.Empty;
@@ -1273,6 +1433,7 @@ namespace NessStudio.ViewModel
                     RecordingPerfProbe.Mark("recording-pause-dispatch");
                     await _rec.PauseAsync();
                     _isPaused = true;
+                    CloseDrawAreaOverlayWindow();
 
                     RecordingPerfProbe.Mark("recording-paused");
                 }
@@ -1287,6 +1448,7 @@ namespace NessStudio.ViewModel
 
                     RecordingPerfProbe.Mark("recording-resume-dispatch");
                     await _rec.ResumeAsync();
+                    RestoreDrawAreaOverlayIfNeeded();
                     _recTimer.Start();
                     _isPaused = false;
 
@@ -1318,6 +1480,7 @@ namespace NessStudio.ViewModel
             _isSavingRecording = true;
             IsEditEnabled = false;
             _recTimer.Stop();
+            ClearDrawAreaOverlay();
 
             _uiPreviewSuppressedDuringRecording = true;
 
