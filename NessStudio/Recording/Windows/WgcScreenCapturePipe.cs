@@ -43,7 +43,10 @@ namespace NessStudio.Recording.Windows
         private int _bytesPerFrame;
         private int _nv12BytesPerFrame;
         private int _cropX, _cropY, _cropW, _cropH;
+
         private volatile bool _stopping;
+        private volatile bool _paused = true;
+
         private readonly object _frameLock = new object();
         private int _framesWritten;
         private int _frameErrors;
@@ -190,6 +193,26 @@ namespace NessStudio.Recording.Windows
             _encodeThread.Start();
             DebugLog.Write("[WGC] encode thread started");
 
+            // P3.5: FramePool criado uma única vez aqui
+            var monSize = new SizeInt32 { Width = mon.Width, Height = mon.Height };
+            RecordingPerfProbe.Mark("wgc-framepool-create", $"size={monSize.Width}x{monSize.Height}");
+            _framePool = Direct3D11CaptureFramePool.CreateFreeThreaded(
+                _wgcDevice,
+                DirectXPixelFormat.B8G8R8A8UIntNormalized,
+                2,
+                monSize);
+            DebugLog.Write($"[WGC] P3.5 FramePool criado em InitializeSession | size={monSize.Width}x{monSize.Height}");
+
+            // P4.0: Session criada uma única vez aqui, começa pausada
+            _item = CreateItemForMonitor(hmon);
+            _session = _framePool.CreateCaptureSession(_item);
+            _session.IsCursorCaptureEnabled = _drawMouse;
+            TrySetIsBorderRequired(_session, false);
+            _framePool.FrameArrived += OnFrameArrived;
+            _paused = true;
+            _session.StartCapture();
+            DebugLog.Write("[WGC] P4.0 Session + FramePool criados em InitializeSession | _paused=true | pipeline ativo");
+
             _sessionInitialized = true;
             RecordingPerfProbe.Mark("wgc-session-init-end", $"crop={_cropW}x{_cropH}");
             DebugLog.Write("[WGC] InitializeSession end");
@@ -202,100 +225,47 @@ namespace NessStudio.Recording.Windows
 
             _segmentIndex = segmentIndex;
             DebugLog.Write($"[WGC] ═══ StartSegment({segmentIndex}) begin ═══");
-            DebugLog.Write($"[WGC] Thread='{Thread.CurrentThread.Name}' ApartmentState={Thread.CurrentThread.GetApartmentState()}");
-            _captureStartedAtUtc = DateTime.UtcNow;
+
             _firstStableFrameAtUtc = null;
             _warmupDiscardedFrames = 0;
             _framesWritten = 0;
             _frameErrors = 0;
             _loggedFirstFrame = false;
-            DebugLog.Write($"[WGC] Warmup configured => {_warmupMilliseconds}ms");
+
+            if (segmentIndex > 1)
+            {
+                // P4.2: pipeline já está quente no resume — pular warmup completamente
+                _captureStartedAtUtc = DateTime.UtcNow.AddMilliseconds(-_warmupMilliseconds);
+                DebugLog.Write("[WGC] P4.2 resume — warmup skipped (pipeline always-on)");
+            }
+            else
+            {
+                _captureStartedAtUtc = DateTime.UtcNow;
+                DebugLog.Write($"[WGC] first segment — warmup={_warmupMilliseconds}ms");
+            }
+
+            if (_segmentIndex > 1 && _lastPauseTimestampHns > 0)
+            {
+                DebugLog.Write($"[WGC] P3.2 PauseInterval deferred | pause={_lastPauseTimestampHns}");
+                RecordingPerfProbe.Mark("wgc-p32-pause-deferred", $"segment={segmentIndex} pause={_lastPauseTimestampHns}");
+            }
 
             RecordingPerfProbe.Mark("wgc-start-begin", $"segment={segmentIndex}");
 
-            try
-            {
-                var abs = GetAbsoluteCaptureRect(_region);
-                var center = new System.Drawing.Point(abs.X + abs.Width / 2, abs.Y + abs.Height / 2);
-                IntPtr hmon = MonitorFromPoint(center, 2);
-                if (hmon == IntPtr.Zero)
-                    throw new InvalidOperationException("MonitorFromPoint retornou zero.");
-
-                RecordingPerfProbe.Mark("wgc-capture-item-begin", $"segment={segmentIndex}");
-                _item = CreateItemForMonitor(hmon);
-                DebugLog.Write("[WGC] GraphicsCaptureItem OK");
-                RecordingPerfProbe.Mark("wgc-capture-item-end", $"segment={segmentIndex}");
-
-                if (_segmentIndex > 1 && _lastPauseTimestampHns > 0)
-                {
-                    DebugLog.Write($"[WGC] P3.2 PauseInterval deferred | pause={_lastPauseTimestampHns} | aguardando primeiro frame estável");
-                    RecordingPerfProbe.Mark("wgc-p32-pause-deferred", $"segment={segmentIndex} pause={_lastPauseTimestampHns}");
-                }
-                DebugLog.Write($"[WGC] F3/F4 writer reused | currentTs={_mf?.CurrentTimestamp ?? 0L}");
-                RecordingPerfProbe.Mark("wgc-mf-start-begin", $"segment={segmentIndex}");
-                RecordingPerfProbe.Mark("wgc-mf-start-end", $"segment={segmentIndex}");
-
-                _stopping = false;
-
-                if (!TryGetMonitorRect(hmon, out var mon))
-                    throw new InvalidOperationException("GetMonitorInfo falhou.");
-                var monSize = new SizeInt32 { Width = mon.Width, Height = mon.Height };
-
-                RecordingPerfProbe.Mark("wgc-framepool-begin", $"segment={segmentIndex} size={monSize.Width}x{monSize.Height}");
-                DebugLog.Write($"[WGC] CreateFreeThreaded FramePool size={monSize.Width}x{monSize.Height}");
-                _framePool = Direct3D11CaptureFramePool.CreateFreeThreaded(
-                    _wgcDevice,
-                    DirectXPixelFormat.B8G8R8A8UIntNormalized,
-                    2,
-                    monSize);
-                _framePool.FrameArrived += OnFrameArrived;
-                DebugLog.Write("[WGC] FramePool criado | FrameArrived registrado");
-                RecordingPerfProbe.Mark("wgc-framepool-end", $"segment={segmentIndex}");
-
-                _session = _framePool.CreateCaptureSession(_item);
-                _session.IsCursorCaptureEnabled = _drawMouse;
-                TrySetIsBorderRequired(_session, false);
-                DebugLog.Write("[WGC] CaptureSession criada");
-                _session.StartCapture();
-                DebugLog.Write("[WGC] StartCapture() OK — aguardando frames...");
-
-                RecordingPerfProbe.Mark("wgc-start-end", $"segment={segmentIndex} crop={_cropW}x{_cropH}");
-            }
-            catch (Exception ex)
-            {
-                DebugLog.Write($"[WGC] StartSegment({segmentIndex}) EXCEPTION:\n" + ex);
-                throw;
-            }
+            // P4.0: liberar o flag — Session e FramePool já estão rodando
+            _paused = false;
+            DebugLog.Write($"[WGC] P4.0 _paused=false | frames começam a ser escritos | segment={segmentIndex}");
+            RecordingPerfProbe.Mark("wgc-start-end", $"segment={segmentIndex} crop={_cropW}x{_cropH}");
         }
 
         public void StopSegment()
         {
             DebugLog.Write($"[WGC] ═══ StopSegment({_segmentIndex}) begin | framesWritten={_framesWritten} | frameErrors={_frameErrors} ═══");
-            _stopping = true;
             RecordingPerfProbe.Mark("wgc-stop-begin", $"segment={_segmentIndex} framesWritten={_framesWritten}");
 
-            try
-            {
-                if (_framePool != null)
-                    _framePool.FrameArrived -= OnFrameArrived;
-            }
-            catch (Exception ex) { DebugLog.Write("[WGC] StopSegment() detach warning: " + ex.Message); }
-
-            bool entered = false;
-            try
-            {
-                Monitor.Enter(_frameLock, ref entered);
-                DebugLog.Write("[WGC] StopSegment() frame lock acquired");
-            }
-            catch (Exception ex) { DebugLog.Write("[WGC] StopSegment() frame lock acquire ERROR: " + ex); }
-            finally { if (entered) Monitor.Exit(_frameLock); }
-
-            try { _session?.Dispose(); } catch (Exception ex) { DebugLog.Write("[WGC] StopSegment() session: " + ex.Message); }
-            try { _framePool?.Dispose(); } catch (Exception ex) { DebugLog.Write("[WGC] StopSegment() framePool: " + ex.Message); }
-
-            _session = null;
-            _framePool = null;
-            _item = null;
+            // P4.0: apenas pausar — Session e FramePool ficam vivos
+            _paused = true;
+            DebugLog.Write("[WGC] P4.0 _paused=true | Session continua ativa");
 
             var sw = System.Diagnostics.Stopwatch.StartNew();
             while (!_encodeQueue.IsEmpty && sw.ElapsedMilliseconds < 600)
@@ -320,6 +290,9 @@ namespace NessStudio.Recording.Windows
         {
             DebugLog.Write("[WGC] ReleaseSession begin");
             RecordingPerfProbe.Mark("wgc-session-release-begin");
+
+            _stopping = true;
+            _paused = true;
 
             _encodeThreadRunning = false;
             _encodeSignal.Release();
@@ -351,6 +324,15 @@ namespace NessStudio.Recording.Windows
                     DebugLog.Write("[WGC] NessMuxerWriter Stop ERROR: " + ex);
                 }
             }
+
+            // P3.5 + P4.0: Session e FramePool destruídos aqui (única vez por sessão)
+            try { if (_framePool != null) _framePool.FrameArrived -= OnFrameArrived; } catch { }
+            try { _session?.Dispose(); } catch (Exception ex) { DebugLog.Write("[WGC] session dispose: " + ex.Message); }
+            try { _framePool?.Dispose(); } catch (Exception ex) { DebugLog.Write("[WGC] framePool dispose: " + ex.Message); }
+            _session = null;
+            _framePool = null;
+            _item = null;
+            DebugLog.Write("[WGC] P3.5+P4.0 Session+FramePool destruídos em ReleaseSession");
 
             RecordingPerfProbe.Mark("wgc-staging-release-begin", "session-release");
             if (_stagingTexPtr != IntPtr.Zero) { Marshal.Release(_stagingTexPtr); _stagingTexPtr = IntPtr.Zero; }
@@ -424,14 +406,19 @@ namespace NessStudio.Recording.Windows
 
         private void OnFrameArrived(Direct3D11CaptureFramePool sender, object args)
         {
-            if (_stopping) return;
+            // P4.0: quando pausado, consumir o frame para manter o FramePool saudável, mas descartar
+            if (_stopping || _paused)
+            {
+                using var _ = sender.TryGetNextFrame();
+                return;
+            }
 
             if (!Monitor.TryEnter(_frameLock))
                 return;
 
             try
             {
-                if (_stopping) return;
+                if (_stopping || _paused) return;
 
                 using var frame = sender.TryGetNextFrame();
                 if (frame == null)
