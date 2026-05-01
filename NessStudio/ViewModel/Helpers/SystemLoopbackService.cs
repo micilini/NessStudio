@@ -111,6 +111,21 @@ namespace NessStudio.ViewModel.Helpers
             return (cap, writer, clock, tick);
         }
 
+        public static void Pause(WasapiLoopbackCapture cap)
+        {
+            DebugLog.Write("[SystemLoopback] Pause begin");
+            try { cap?.StopRecording(); } catch { }
+            try { System.Threading.Thread.Sleep(80); } catch { }
+            DebugLog.Write("[SystemLoopback] Pause end");
+        }
+
+        public static void Resume(WasapiLoopbackCapture cap)
+        {
+            DebugLog.Write("[SystemLoopback] Resume begin");
+            try { cap?.StartRecording(); } catch (Exception ex) { DebugLog.Write("[SystemLoopback] Resume ERROR:\n" + ex); }
+            DebugLog.Write("[SystemLoopback] Resume end");
+        }
+
         public static void Stop(WasapiLoopbackCapture cap, WaveFileWriter writer, System.Timers.Timer tick)
         {
             DebugLog.Write("[SystemLoopback] Stop begin");
@@ -121,14 +136,7 @@ namespace NessStudio.ViewModel.Helpers
             try { writer?.Flush(); } catch { }
             try { writer?.Dispose(); } catch { }
 
-            try
-            {
-                cap?.StopRecording();
-            }
-            catch (Exception ex)
-            {
-                DebugLog.Write("[SystemLoopback] StopRecording warning:\n" + ex);
-            }
+            try { cap?.StopRecording(); } catch (Exception ex) { DebugLog.Write("[SystemLoopback] StopRecording warning:\n" + ex); }
 
             try { System.Threading.Thread.Sleep(80); } catch { }
 
