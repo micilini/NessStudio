@@ -64,12 +64,10 @@ namespace NessStudio.ViewModel.Helpers
 
             _wgcWebcam ??= new MediaCaptureWebcamSegmentRecorder();
 
-            int prepareSegmentIndex = _seg.IsRunning ? _seg.SegmentIndex : (_seg.SegmentIndex + 1);
-            string outFile = _paths.WebcamSegment(prepareSegmentIndex);
+            string outFile = _paths.WebcamContinuous();
 
             DebugLog.Write(
-                $"[RecordAssist] PrepareAsync begin | webcam={_targets.WebcamName} | " +
-                $"segmentIndex={prepareSegmentIndex} | outFile={outFile}");
+                $"[RecordAssist] PrepareAsync begin | webcam={_targets.WebcamName} | outFile={outFile}");
 
             await _wgcWebcam.PrepareAsync(_targets.WebcamName, outFile);
 
@@ -322,10 +320,18 @@ namespace NessStudio.ViewModel.Helpers
             if (string.IsNullOrWhiteSpace(_targets.WebcamName))
                 return;
 
-            string outFile = _paths.WebcamSegment(_seg.SegmentIndex);
-            DebugLog.Write($"[RecordAssist] StartWebcamSegment begin | webcam={_targets.WebcamName} | outFile={outFile}");
-
             _wgcWebcam ??= new MediaCaptureWebcamSegmentRecorder();
+
+            if (_seg.SegmentIndex > 1)
+            {
+                DebugLog.Write("[RecordAssist] StartWebcamSegment resume -> ResumeAsync");
+                await _wgcWebcam.ResumeAsync();
+                DebugLog.Write("[RecordAssist] StartWebcamSegment resume OK");
+                return;
+            }
+
+            string outFile = _paths.WebcamContinuous();
+            DebugLog.Write($"[RecordAssist] StartWebcamSegment begin | webcam={_targets.WebcamName} | outFile={outFile}");
 
             int webcamWarmupMs = Math.Max(0, _runtimeOptions?.WebcamWarmupMilliseconds ?? 900);
             DebugLog.Write($"[RecordAssist] webcam logical warmup => {webcamWarmupMs}ms");
@@ -340,8 +346,13 @@ namespace NessStudio.ViewModel.Helpers
         {
             try
             {
-                if (_wgcWebcam != null && (_wgcWebcam.IsRecording || _wgcWebcam.IsPrepared))
-                    await _wgcWebcam.StopAsync();
+                if (_wgcWebcam != null && _wgcWebcam.IsRecording)
+                {
+                    if (releaseSession)
+                        await _wgcWebcam.StopAsync();
+                    else
+                        await _wgcWebcam.PauseAsync();
+                }
 
                 if (releaseSession && _wgcWebcam != null)
                 {
@@ -483,7 +494,7 @@ namespace NessStudio.ViewModel.Helpers
                 ReportSaveProgress(progress, "Saving Recording...", "Finalizing webcam...", 35, 3, totalSteps);
                 try
                 {
-                    await StopWebcamSegmentAsync();
+                    await StopWebcamSegmentAsync(releaseSession: true);
                     DebugLog.Write("[RecordAssist] StopWebcamSegmentAsync OK");
                 }
                 catch (Exception ex)
@@ -524,7 +535,10 @@ namespace NessStudio.ViewModel.Helpers
                 ? new List<string> { screenContinuousFile }
                 : _paths.Parts(_paths.ScreenPrefix, _paths.ScreenExt);
 
-            var webcamParts = _paths.Parts(_paths.WebcamPrefix, _paths.WebcamExt);
+            var webcamContinuousFile = _paths.WebcamContinuous();
+            var webcamParts = File.Exists(webcamContinuousFile)
+                ? new List<string> { webcamContinuousFile }
+                : _paths.Parts(_paths.WebcamPrefix, _paths.WebcamExt);
             var micParts = _paths.Parts(_paths.MicPrefix, _paths.MicExt);
             var sysParts = _paths.Parts(_paths.SystemPrefix, _paths.SystemExt);
 
@@ -799,9 +813,9 @@ namespace NessStudio.ViewModel.Helpers
                     Screen = string.IsNullOrWhiteSpace(screenPrimary) ? null : new SessionManifest.VideoTrack
                     {
                         File = Path.GetFileName(screenPrimary),
-                        Duration = screenSnapshot != null
-                            ? TryBuildScreenDuration(screenSnapshot.FrameCount, screenSnapshot.Fps)
-                            : SessionManifestWriter.FormatDuration(screenInfo?.Duration ?? TimeSpan.Zero),
+                        Duration = screenInfo?.Duration != null && screenInfo.Duration > TimeSpan.Zero
+                            ? SessionManifestWriter.FormatDuration(screenInfo.Duration)
+                            : TryBuildScreenDuration(screenSnapshot?.FrameCount ?? 0, screenSnapshot?.Fps ?? 30),
                         Segments = screenSegments,
                         Width = screenSnapshot?.Width ?? screenInfo?.Width ?? 0,
                         Height = screenSnapshot?.Height ?? screenInfo?.Height ?? 0,

@@ -1,6 +1,7 @@
 ﻿using NessStudio.Models;
 using System;
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -9,8 +10,8 @@ using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX;
 using Windows.Graphics.DirectX.Direct3D11;
 using WinRT;
-using System.Windows.Threading;
 using NessStudio.ViewModel.Helpers;
+
 namespace NessStudio.Recording.Windows
 {
     public sealed class WgcScreenCapturePipe : IDisposable
@@ -22,6 +23,7 @@ namespace NessStudio.Recording.Windows
         private readonly bool _drawMouse;
         private readonly int _warmupMilliseconds;
         private bool _sessionInitialized;
+
         private GraphicsCaptureItem _item;
         private Direct3D11CaptureFramePool _framePool;
         private GraphicsCaptureSession _session;
@@ -31,18 +33,18 @@ namespace NessStudio.Recording.Windows
         private IntPtr _stagingTexPtr;
         private int _stagingW, _stagingH;
         private NessMuxerWriter _mf;
+
         private long _segmentStartTimestampHns;
         private readonly System.Collections.Generic.List<(long PauseHns, long ResumeHns)> _pauseIntervals
             = new System.Collections.Generic.List<(long, long)>();
         private long _lastPauseTimestampHns;
+
         private byte[] _frameBuffer;
-        private byte[] _invokeBuffer;
         private int _bytesPerFrame;
         private int _nv12BytesPerFrame;
         private int _cropX, _cropY, _cropW, _cropH;
         private volatile bool _stopping;
         private readonly object _frameLock = new object();
-        private volatile bool _framePending;
         private int _framesWritten;
         private int _frameErrors;
         private bool _loggedFirstFrame;
@@ -50,7 +52,43 @@ namespace NessStudio.Recording.Windows
         private DateTime _captureStartedAtUtc;
         private DateTime? _firstStableFrameAtUtc;
         private int _warmupDiscardedFrames;
-        private Dispatcher _writerDispatcher;
+        private DateTime _segmentFirstFrameTime;
+        private long _segmentBasePts;
+
+        private readonly struct QueuedFrame
+        {
+            public readonly byte[] Buffer;
+            public readonly bool IsFirst;
+            public readonly int SegIdx;
+            public readonly long PauseHns;
+            public readonly DateTime CaptureStart;
+            public readonly int WarmupDiscarded;
+            public readonly int RowPitch;
+            public readonly long PtsHns;
+
+            public QueuedFrame(byte[] buf, bool isFirst, int segIdx, long pauseHns,
+                               DateTime captureStart, int warmupDiscarded, int rowPitch, long ptsHns)
+            {
+                Buffer = buf;
+                IsFirst = isFirst;
+                SegIdx = segIdx;
+                PauseHns = pauseHns;
+                CaptureStart = captureStart;
+                WarmupDiscarded = warmupDiscarded;
+                RowPitch = rowPitch;
+                PtsHns = ptsHns;
+            }
+        }
+
+        private readonly ConcurrentQueue<QueuedFrame> _encodeQueue = new ConcurrentQueue<QueuedFrame>();
+        private readonly ConcurrentBag<byte[]> _bufferPool = new ConcurrentBag<byte[]>();
+        private readonly SemaphoreSlim _encodeSignal = new SemaphoreSlim(0, int.MaxValue);
+        private Thread _encodeThread;
+        private volatile bool _encodeThreadRunning;
+
+        private const int PoolSize = 8;
+        private const int MaxQueueSize = 3;
+
         private static readonly Guid IID_IGraphicsCaptureItem = new("79C3F95B-31F7-4EC2-A464-632EF5D30760");
         private static readonly Guid IID_ID3D11Texture2D = new("6f15aaf2-d208-4e89-9ab4-489535d34f9c");
 
@@ -130,7 +168,9 @@ namespace NessStudio.Recording.Windows
             _bytesPerFrame = _cropW * _cropH * 4;
             _nv12BytesPerFrame = (_cropW * _cropH * 3) / 2;
             _frameBuffer = ArrayPool<byte>.Shared.Rent(_bytesPerFrame);
-            _invokeBuffer = new byte[_nv12BytesPerFrame];
+
+            for (int i = 0; i < PoolSize; i++)
+                _bufferPool.Add(new byte[_nv12BytesPerFrame]);
 
             string continuousFile = _paths.ScreenContinuous();
             DebugLog.Write($"[WGC] creating persistent NessMuxerWriter => {continuousFile} | {_cropW}x{_cropH} @{_fps}fps");
@@ -139,6 +179,16 @@ namespace NessStudio.Recording.Windows
             _mf.Start(continuousFile, _cropW, _cropH, _fps);
             RecordingPerfProbe.Mark("wgc-writer-create-end", $"file={System.IO.Path.GetFileName(continuousFile)}");
             DebugLog.Write("[WGC] persistent NessMuxerWriter created OK");
+
+            _encodeThreadRunning = true;
+            _encodeThread = new Thread(EncodeThreadProc)
+            {
+                Name = "NessStudio-Encoder",
+                IsBackground = true,
+                Priority = ThreadPriority.AboveNormal
+            };
+            _encodeThread.Start();
+            DebugLog.Write("[WGC] encode thread started");
 
             _sessionInitialized = true;
             RecordingPerfProbe.Mark("wgc-session-init-end", $"crop={_cropW}x{_cropH}");
@@ -153,15 +203,12 @@ namespace NessStudio.Recording.Windows
             _segmentIndex = segmentIndex;
             DebugLog.Write($"[WGC] ═══ StartSegment({segmentIndex}) begin ═══");
             DebugLog.Write($"[WGC] Thread='{Thread.CurrentThread.Name}' ApartmentState={Thread.CurrentThread.GetApartmentState()}");
-            _writerDispatcher = Dispatcher.CurrentDispatcher;
             _captureStartedAtUtc = DateTime.UtcNow;
             _firstStableFrameAtUtc = null;
             _warmupDiscardedFrames = 0;
             _framesWritten = 0;
             _frameErrors = 0;
             _loggedFirstFrame = false;
-            _framePending = false;
-            DebugLog.Write($"[WGC] WriterDispatcher captured | ThreadId={Thread.CurrentThread.ManagedThreadId}");
             DebugLog.Write($"[WGC] Warmup configured => {_warmupMilliseconds}ms");
 
             RecordingPerfProbe.Mark("wgc-start-begin", $"segment={segmentIndex}");
@@ -250,18 +297,10 @@ namespace NessStudio.Recording.Windows
             _framePool = null;
             _item = null;
 
-            var dispatcherSnapshot = _writerDispatcher;
-            _writerDispatcher = null;
-            _framePending = false;
-
-            if (dispatcherSnapshot != null && !dispatcherSnapshot.CheckAccess())
-            {
-                try
-                {
-                    dispatcherSnapshot.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ContextIdle);
-                }
-                catch { }
-            }
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (!_encodeQueue.IsEmpty && sw.ElapsedMilliseconds < 600)
+                Thread.Sleep(5);
+            DebugLog.Write($"[WGC] encode queue drained | waited={sw.ElapsedMilliseconds}ms | remaining={_encodeQueue.Count}");
 
             RecordingPerfProbe.Mark("wgc-mf-stop-begin", $"segment={_segmentIndex}");
             _lastPauseTimestampHns = _mf?.CurrentTimestamp ?? 0L;
@@ -273,7 +312,7 @@ namespace NessStudio.Recording.Windows
             catch (Exception ex) { DebugLog.Write("[WGC] StopSegment() writer PauseSegment ERROR: " + ex); }
             RecordingPerfProbe.Mark("wgc-mf-stop-end", $"segment={_segmentIndex}");
 
-            DebugLog.Write($"[WGC] StopSegment({_segmentIndex}) end — D3D11/staging/buffer preservados para reuso");
+            DebugLog.Write($"[WGC] StopSegment({_segmentIndex}) end");
             RecordingPerfProbe.Mark("wgc-stop-end", $"segment={_segmentIndex}");
         }
 
@@ -282,12 +321,20 @@ namespace NessStudio.Recording.Windows
             DebugLog.Write("[WGC] ReleaseSession begin");
             RecordingPerfProbe.Mark("wgc-session-release-begin");
 
+            _encodeThreadRunning = false;
+            _encodeSignal.Release();
+            _encodeThread?.Join(2000);
+            _encodeThread = null;
+            DebugLog.Write("[WGC] encode thread stopped");
+
+            while (_bufferPool.TryTake(out _)) { }
+            while (_encodeQueue.TryDequeue(out _)) { }
+
             if (_frameBuffer != null)
             {
                 ArrayPool<byte>.Shared.Return(_frameBuffer);
                 _frameBuffer = null;
             }
-            _invokeBuffer = null;
 
             var mfLocal = _mf;
             _mf = null;
@@ -318,6 +365,61 @@ namespace NessStudio.Recording.Windows
             _sessionInitialized = false;
             RecordingPerfProbe.Mark("wgc-session-release-end");
             DebugLog.Write("[WGC] ReleaseSession end");
+        }
+
+        private void EncodeThreadProc()
+        {
+            DebugLog.Write("[WGC-ENC] encode thread running");
+            while (_encodeThreadRunning || !_encodeQueue.IsEmpty)
+            {
+                if (!_encodeSignal.Wait(50))
+                    continue;
+
+                if (!_encodeQueue.TryDequeue(out var item))
+                    continue;
+
+                try
+                {
+                    var mfLocal = _mf;
+                    if (mfLocal == null)
+                    {
+                        _bufferPool.Add(item.Buffer);
+                        continue;
+                    }
+
+                    mfLocal.WriteFramePts(new ReadOnlySpan<byte>(item.Buffer, 0, item.Buffer.Length), item.PtsHns);
+
+                    if (item.IsFirst && item.SegIdx > 1 && item.PauseHns > 0)
+                    {
+                        long resumeTs = mfLocal.CurrentTimestamp;
+                        lock (_pauseIntervals)
+                        {
+                            _pauseIntervals.Add((item.PauseHns, resumeTs));
+                        }
+                        DebugLog.Write($"[WGC] P3.2 PauseInterval completed | pause={item.PauseHns} resume={resumeTs} delta={resumeTs - item.PauseHns}");
+                        RecordingPerfProbe.Mark("wgc-p32-resume-recorded", $"pause={item.PauseHns} resume={resumeTs}");
+                    }
+
+                    if (item.IsFirst)
+                    {
+                        _firstStableFrameAtUtc = DateTime.UtcNow;
+                        double stableAfterMs = (_firstStableFrameAtUtc.Value - item.CaptureStart).TotalMilliseconds;
+                        DebugLog.Write(
+                            $"[WGC] PRIMEIRO FRAME ESTÁVEL ESCRITO | crop={_cropW}x{_cropH} | " +
+                            $"rowPitch={item.RowPitch} | warmupDiscarded={item.WarmupDiscarded} | " +
+                            $"stableAfter={stableAfterMs:F0}ms");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    DebugLog.Write($"[WGC-ENC] WriteFrame ERROR: {ex.Message}");
+                }
+                finally
+                {
+                    _bufferPool.Add(item.Buffer);
+                }
+            }
+            DebugLog.Write("[WGC-ENC] encode thread exiting");
         }
 
         private void OnFrameArrived(Direct3D11CaptureFramePool sender, object args)
@@ -379,70 +481,41 @@ namespace NessStudio.Recording.Windows
                             return;
                         }
 
-                        if (_mf == null)
+                        if (_mf == null) return;
+
+                        bool isFirst = !_loggedFirstFrame;
+                        if (isFirst)
                         {
-                            DebugLog.Write("[WGC] _mf está null antes do WriteFrame");
-                            return;
-                        }
-
-                        if (_writerDispatcher == null)
-                        {
-                            DebugLog.Write("[WGC] _writerDispatcher está null antes do WriteFrame");
-                            return;
-                        }
-
-                        var mfLocal = _mf;
-                        if (mfLocal == null || _stopping) return;
-
-                        if (_framePending) return;
-                        _framePending = true;
-
-                        ConvertBgraToNv12(_frameBuffer, _cropW, _cropH, _invokeBuffer);
-
-                        bool isFirstFrame = !_loggedFirstFrame;
-                        int segIdxLocal = _segmentIndex;
-                        long pauseHnsLocal = _lastPauseTimestampHns;
-                        DateTime captureStartLocal = _captureStartedAtUtc;
-                        int warmupDiscardedLocal = _warmupDiscardedFrames;
-                        int rowPitchLocal = mapped.RowPitch;
-
-                        if (isFirstFrame)
                             _loggedFirstFrame = true;
+                            _segmentFirstFrameTime = DateTime.UtcNow;
+                            _segmentBasePts = _lastPauseTimestampHns + (10_000_000L / _fps);
+                        }
 
-                        _writerDispatcher.BeginInvoke(() =>
+                        long elapsedHns = (long)(DateTime.UtcNow - _segmentFirstFrameTime).TotalMilliseconds * 10_000L;
+                        long ptsHns = _segmentBasePts + elapsedHns;
+
+                        if (!_bufferPool.TryTake(out byte[] encBuf))
+                            encBuf = new byte[_nv12BytesPerFrame];
+
+                        ConvertBgraToNv12(_frameBuffer, _cropW, _cropH, encBuf);
+
+                        while (_encodeQueue.Count >= MaxQueueSize)
                         {
-                            try
+                            if (_encodeQueue.TryDequeue(out var dropped))
                             {
-                                if (_stopping) return;
-                                mfLocal.WriteFrame(new ReadOnlySpan<byte>(_invokeBuffer, 0, _nv12BytesPerFrame));
-
-                                if (isFirstFrame && segIdxLocal > 1 && pauseHnsLocal > 0)
-                                {
-                                    long resumeTs = mfLocal.CurrentTimestamp;
-                                    _pauseIntervals.Add((pauseHnsLocal, resumeTs));
-                                    DebugLog.Write($"[WGC] P3.2 PauseInterval completed | pause={pauseHnsLocal} resume={resumeTs} delta={resumeTs - pauseHnsLocal}");
-                                    RecordingPerfProbe.Mark("wgc-p32-resume-recorded", $"pause={pauseHnsLocal} resume={resumeTs}");
-                                }
-
-                                if (isFirstFrame)
-                                {
-                                    _firstStableFrameAtUtc = DateTime.UtcNow;
-                                    double stableAfterMs = (_firstStableFrameAtUtc.Value - captureStartLocal).TotalMilliseconds;
-                                    DebugLog.Write(
-                                        $"[WGC] PRIMEIRO FRAME ESTÁVEL ESCRITO | crop={_cropW}x{_cropH} | " +
-                                        $"rowPitch={rowPitchLocal} | warmupDiscarded={warmupDiscardedLocal} | " +
-                                        $"stableAfter={stableAfterMs:F0}ms");
-                                }
+                                _bufferPool.Add(dropped.Buffer);
+                                DebugLog.Write($"[WGC] frame drop (queue full) | queueSize={_encodeQueue.Count}");
                             }
-                            catch { }
-                            finally
-                            {
-                                _framePending = false;
-                            }
-                        });
+                        }
+
+                        var queued = new QueuedFrame(
+                            encBuf, isFirst, _segmentIndex, _lastPauseTimestampHns,
+                            _captureStartedAtUtc, _warmupDiscardedFrames, mapped.RowPitch, ptsHns);
+
+                        _encodeQueue.Enqueue(queued);
+                        _encodeSignal.Release();
 
                         _framesWritten++;
-
                         if (_framesWritten % 30 == 0)
                             DebugLog.Write($"[WGC] progress: framesWritten={_framesWritten} erros={_frameErrors} warmupDiscarded={_warmupDiscardedFrames}");
                     }
@@ -474,38 +547,19 @@ namespace NessStudio.Recording.Windows
             try
             {
                 IDirect3DDxgiInterfaceAccess access;
-                try
-                {
-                    access = surface.As<IDirect3DDxgiInterfaceAccess>();
-                }
-                catch (Exception ex)
-                {
-                    DebugLog.Write("[WGC] surface.As<IDirect3DDxgiInterfaceAccess>() ERROR: " + ex);
-                    return IntPtr.Zero;
-                }
+                try { access = surface.As<IDirect3DDxgiInterfaceAccess>(); }
+                catch (Exception ex) { DebugLog.Write("[WGC] surface.As ERROR: " + ex); return IntPtr.Zero; }
                 IntPtr texPtr = IntPtr.Zero;
                 try
                 {
                     Guid iidTexture2D = IID_ID3D11Texture2D;
                     texPtr = access.GetInterface(ref iidTexture2D);
                 }
-                catch (Exception ex)
-                {
-                    DebugLog.Write("[WGC] access.GetInterface(ID3D11Texture2D) ERROR: " + ex);
-                    return IntPtr.Zero;
-                }
-                if (texPtr == IntPtr.Zero)
-                {
-                    DebugLog.Write("[WGC] access.GetInterface retornou ponteiro zero");
-                    return IntPtr.Zero;
-                }
+                catch (Exception ex) { DebugLog.Write("[WGC] GetInterface ERROR: " + ex); return IntPtr.Zero; }
+                if (texPtr == IntPtr.Zero) { DebugLog.Write("[WGC] GetInterface retornou zero"); return IntPtr.Zero; }
                 return texPtr;
             }
-            catch (Exception ex)
-            {
-                DebugLog.Write("[WGC] GetD3D11Texture2DFromSurface EXCEPTION: " + ex);
-                return IntPtr.Zero;
-            }
+            catch (Exception ex) { DebugLog.Write("[WGC] GetD3D11Texture2DFromSurface EXCEPTION: " + ex); return IntPtr.Zero; }
         }
 
         private void EnsureStagingTexture(int width, int height)
@@ -574,14 +628,11 @@ namespace NessStudio.Recording.Windows
 
         private static void ConvertBgraToNv12(byte[] bgra, int width, int height, byte[] destinationNv12)
         {
-            if (bgra == null)
-                throw new ArgumentNullException(nameof(bgra));
-            if (destinationNv12 == null)
-                throw new ArgumentNullException(nameof(destinationNv12));
+            if (bgra == null) throw new ArgumentNullException(nameof(bgra));
+            if (destinationNv12 == null) throw new ArgumentNullException(nameof(destinationNv12));
 
             int ySize = width * height;
-            int requiredNv12 = ySize + (ySize / 2);
-            if (destinationNv12.Length < requiredNv12)
+            if (destinationNv12.Length < ySize + (ySize / 2))
                 throw new ArgumentException("destinationNv12 menor que o esperado.", nameof(destinationNv12));
 
             for (int row = 0; row < height; row++)
@@ -591,11 +642,8 @@ namespace NessStudio.Recording.Windows
                 for (int col = 0; col < width; col++)
                 {
                     int s = srcRow + col * 4;
-                    byte b = bgra[s];
-                    byte g = bgra[s + 1];
-                    byte r = bgra[s + 2];
-                    destinationNv12[dstRow + col] =
-                        (byte)Math.Clamp(((66 * r + 129 * g + 25 * b + 128) >> 8) + 16, 16, 235);
+                    byte b = bgra[s]; byte g = bgra[s + 1]; byte r = bgra[s + 2];
+                    destinationNv12[dstRow + col] = (byte)Math.Clamp(((66 * r + 129 * g + 25 * b + 128) >> 8) + 16, 16, 235);
                 }
             }
 
@@ -607,13 +655,9 @@ namespace NessStudio.Recording.Windows
                 for (int col = 0; col < width; col += 2)
                 {
                     int s = srcRow + col * 4;
-                    byte b = bgra[s];
-                    byte g = bgra[s + 1];
-                    byte r = bgra[s + 2];
-                    destinationNv12[dstUv + col] =
-                        (byte)Math.Clamp(((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128, 16, 240);
-                    destinationNv12[dstUv + col + 1] =
-                        (byte)Math.Clamp(((112 * r - 94 * g - 18 * b + 128) >> 8) + 128, 16, 240);
+                    byte b = bgra[s]; byte g = bgra[s + 1]; byte r = bgra[s + 2];
+                    destinationNv12[dstUv + col] = (byte)Math.Clamp(((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128, 16, 240);
+                    destinationNv12[dstUv + col + 1] = (byte)Math.Clamp(((112 * r - 94 * g - 18 * b + 128) >> 8) + 128, 16, 240);
                 }
             }
         }
@@ -626,8 +670,12 @@ namespace NessStudio.Recording.Windows
         public int ScreenStrideUV => _mf?.StrideUV ?? _cropW;
         public string ScreenPixelFormat => "h264";
         public bool IsScreenRawIntermediate => false;
+
         public IReadOnlyList<(long PauseHns, long ResumeHns)> PauseIntervals
-            => _pauseIntervals.AsReadOnly();
+        {
+            get { lock (_pauseIntervals) { return _pauseIntervals.ToArray(); } }
+        }
+
         public string ScreenContinuousFile => _paths.ScreenContinuous();
 
         public void Dispose()
@@ -650,13 +698,9 @@ namespace NessStudio.Recording.Windows
         private const int D3D11_MAP_READ = 1;
 
         [DllImport("d3d11.dll", CallingConvention = CallingConvention.StdCall)]
-        private static extern int D3D11CreateDevice(
-            IntPtr pAdapter, int driverType, IntPtr software, uint flags,
-            int[] pFeatureLevels, int featureLevels, int sdkVersion,
-            out IntPtr ppDevice, out int pFeatureLevel, out IntPtr ppImmediateContext);
+        private static extern int D3D11CreateDevice(IntPtr pAdapter, int driverType, IntPtr software, uint flags, int[] pFeatureLevels, int featureLevels, int sdkVersion, out IntPtr ppDevice, out int pFeatureLevel, out IntPtr ppImmediateContext);
 
-        [DllImport("d3d11.dll", EntryPoint = "CreateDirect3D11DeviceFromDXGIDevice",
-                   CallingConvention = CallingConvention.StdCall)]
+        [DllImport("d3d11.dll", EntryPoint = "CreateDirect3D11DeviceFromDXGIDevice", CallingConvention = CallingConvention.StdCall)]
         private static extern int CreateDirect3D11DeviceFromDXGIDevice(IntPtr dxgiDevice, out IntPtr graphicsDevice);
 
         private static int D3D11CreateTexture2D_Vtbl(IntPtr dev, ref D3D11_TEXTURE2D_DESC desc, IntPtr pData, out IntPtr tex)
@@ -709,12 +753,7 @@ namespace NessStudio.Recording.Windows
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct D3D11_TEXTURE2D_DESC
-        {
-            public uint Width, Height, MipLevels, ArraySize, Format;
-            public uint SampleDesc_Count, SampleDesc_Quality;
-            public uint Usage, BindFlags, CPUAccessFlags, MiscFlags;
-        }
+        private struct D3D11_TEXTURE2D_DESC { public uint Width, Height, MipLevels, ArraySize, Format, SampleDesc_Count, SampleDesc_Quality, Usage, BindFlags, CPUAccessFlags, MiscFlags; }
 
         [StructLayout(LayoutKind.Sequential)]
         private struct D3D11_MAPPED_SUBRESOURCE { public IntPtr pData; public int RowPitch, DepthPitch; }
@@ -723,13 +762,7 @@ namespace NessStudio.Recording.Windows
         private struct RECT { public int Left, Top, Right, Bottom; }
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
-        private struct MONITORINFOEX
-        {
-            public int cbSize;
-            public RECT rcMonitor, rcWork;
-            public int dwFlags;
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string szDevice;
-        }
+        private struct MONITORINFOEX { public int cbSize; public RECT rcMonitor, rcWork; public int dwFlags; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string szDevice; }
 
         private readonly struct MonitorRect
         {
@@ -750,17 +783,12 @@ namespace NessStudio.Recording.Windows
         {
             var mi = new MONITORINFOEX { cbSize = Marshal.SizeOf<MONITORINFOEX>() };
             if (!GetMonitorInfo(hmon, ref mi)) { rect = default; return false; }
-            rect = new MonitorRect(mi.rcMonitor.Left, mi.rcMonitor.Top,
-                                   mi.rcMonitor.Right - mi.rcMonitor.Left,
-                                   mi.rcMonitor.Bottom - mi.rcMonitor.Top);
+            rect = new MonitorRect(mi.rcMonitor.Left, mi.rcMonitor.Top, mi.rcMonitor.Right - mi.rcMonitor.Left, mi.rcMonitor.Bottom - mi.rcMonitor.Top);
             return true;
         }
 
         [ComImport, Guid("A9B3D012-3DF2-4EE3-B8D1-8695F457D3C1"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-        private interface IDirect3DDxgiInterfaceAccess
-        {
-            IntPtr GetInterface([In] ref Guid iid);
-        }
+        private interface IDirect3DDxgiInterfaceAccess { IntPtr GetInterface([In] ref Guid iid); }
 
         [ComImport, Guid("54EC77FA-1377-44E6-8C32-88FD5F44C84C"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
         private interface IDXGIDevice { }

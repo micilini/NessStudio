@@ -168,11 +168,50 @@ namespace NessStudio.Recording.Windows
             }
         }
 
-        
-        
-        
-        
-        
+
+        public void WriteFramePts(ReadOnlySpan<byte> nv12Frame, long ptsHns)
+        {
+            lock (_sync)
+            {
+                if (!_started || _muxer == IntPtr.Zero)
+                    return;
+
+                if (nv12Frame.Length < _frameSize)
+                    throw new ArgumentException(
+                        $"Frame NV12 menor que o esperado. expected={_frameSize} actual={nv12Frame.Length}",
+                        nameof(nv12Frame));
+
+                int ret;
+
+                unsafe
+                {
+                    fixed (byte* ptr = nv12Frame)
+                    {
+                        ret = NessMuxerInterop.ness_muxer_write_frame_pts(
+                            _muxer, (IntPtr)ptr, _frameSize, ptsHns);
+                    }
+                }
+
+                if (ret != NessMuxerInterop.NESS_OK)
+                {
+                    string err = NessMuxerInterop.GetError(_muxer);
+                    DebugLog.Write(
+                        $"[NessMuxerWriter] WriteFramePts FAILED at frame {_frameCount} pts={ptsHns} (ret={ret}): {err}");
+                    return;
+                }
+
+                _frameCount++;
+                _currentTimestamp = ptsHns;
+
+                if (_frameCount == 1)
+                    DebugLog.Write($"[NessMuxerWriter] PRIMEIRO FRAME gravado | pts={ptsHns} bytes={_frameSize}");
+                else if ((_frameCount % 30) == 0)
+                    DebugLog.Write($"[NessMuxerWriter] progress | frames={_frameCount} | pts={ptsHns}");
+            }
+        }
+
+
+
         public void PauseSegment()
         {
             lock (_sync)
