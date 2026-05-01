@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+
 namespace NessStudio.Recording
 {
     public sealed class SessionManifest
@@ -9,10 +10,8 @@ namespace NessStudio.Recording
         public string SessionId { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
 
-        
         public string BaseDir { get; set; }
 
-        
         public DateTimeOffset? StartedAtUtc { get; set; }
         public DateTimeOffset? StoppedAtUtc { get; set; }
         public long? DurationMs { get; set; }
@@ -38,20 +37,15 @@ namespace NessStudio.Recording
         {
             public string File { get; set; }
             public string Duration { get; set; }
-            public List<SegmentEntry> Segments { get; set; }
-
             public int Width { get; set; }
             public int Height { get; set; }
             public int Fps { get; set; }
-
-            
-            public string ContainerKind { get; set; }   
-            public string PixelFormat { get; set; }     
+            public string ContainerKind { get; set; }
+            public string PixelFormat { get; set; }
             public long? FrameCount { get; set; }
             public int? StrideY { get; set; }
             public int? StrideUV { get; set; }
             public bool IsRawIntermediate { get; set; }
-
             public bool HasDrawAreaCrop { get; set; }
             public CropRect CropPx { get; set; }
         }
@@ -60,21 +54,17 @@ namespace NessStudio.Recording
         {
             public string File { get; set; }
             public string Duration { get; set; }
-            public List<SegmentEntry> Segments { get; set; }
             public int SampleRate { get; set; }
             public int Channels { get; set; }
             public int BitsPerSample { get; set; }
-
-            
             public long? OffsetMs { get; set; }
         }
 
+        // Mantida para compatibilidade com SessionManifestWriter.BuildAudioSegment / SumDurations
         public sealed class SegmentEntry
         {
             public string File { get; set; }
             public string Duration { get; set; }
-
-            
             public long? FrameCount { get; set; }
         }
 
