@@ -1,12 +1,15 @@
 <p align="center">
   <img width="128" align="center" src="images/logo-nessstudio.png">
 </p>
+
 <h1 align="center">
   NessStudio For Windows (1.1.0)
 </h1>
+
 <p align="center">
   Capture everything in high quality :)
 </p>
+
 <p align="center">
   <a href="https://micilini.com/apps/nessstudio" target="_blank">
     <img src="images/buttonDownload.png" width="300" alt="Download Link" />
@@ -26,26 +29,43 @@
 
 > ⚠️ **Work in Progress**
 >
-> NessStudio is under active development. Some features are still being stabilized. See the [Known Issues](#known-issues) section before using.
+> NessStudio is under active development. The current generation is focused on the native recording pipeline, independent capture channels, session metadata, recording previews, and export tools.
 
 ---
 
 # NessStudio
 
-**NessStudio** is a Windows-native screen recorder capable of capturing your screen, webcam, and audio (microphone + system) simultaneously. It outputs a single `.mkv` file for video (encoded as H.264) and `.wav` files for each audio track.
+**NessStudio** is a Windows-native recording application capable of capturing your screen, webcam, microphone, and system audio.
 
-Ideal for tutorials, classes, onboarding, technical support, and everyday recordings.
+It is ideal for tutorials, classes, onboarding, technical support, product demos, and quick everyday recordings.
 
 ## Features
 
 - **Capture modes:** full monitor or custom region (_Draw Area_)
+- **Independent recording channels:** screen, webcam, microphone, and system audio can be recorded alone or in combination
 - **Webcam + Screen:** simultaneous recording with configurable quality
-- **Full Audio Support:** microphone and system audio in dedicated tracks
+- **Full audio support:** microphone and system audio are stored as dedicated `.wav` tracks
 - **Pause / Resume:** pause and continue recording without losing the session
-- **Windows-native pipeline:** built on [Windows Graphics Capture (WGC)](https://learn.microsoft.com/en-us/uwp/api/windows.graphics.capture) — no FFmpeg dependency
-- **NessMuxer integration:** video is encoded and muxed by [NessMuxer](https://github.com/micilini/NessMuxer), a standalone C library (NV12 → H.264 → MKV)
-- **Session manifest:** each recording generates a `session.manifest.json` with metadata, track info, and pause intervals
-- **Diagnostics support:** optional debug logs for troubleshooting and validation
+- **Windows-native screen pipeline:** built on [Windows Graphics Capture (WGC)](https://learn.microsoft.com/en-us/uwp/api/windows.graphics.capture)
+- **NessMuxer integration:** screen video is encoded and muxed by [NessMuxer](https://github.com/micilini/NessMuxer), a standalone C library
+- **Session manifest:** each recording generates `manifest.json` and `session.manifest.json` with metadata, track info, and pause intervals
+- **Recording preview:** session thumbnails are generated from the screen track first, with webcam as fallback
+- **Diagnostics support:** debug logs help validate capture behavior and troubleshoot issues
+
+## Current Recording Output
+
+A recording session may generate one or more of the following files, depending on the selected sources:
+
+| Source | Output |
+|---|---|
+| Screen | `screen.mkv` |
+| Webcam | `webcam.mp4` |
+| Microphone | `mic.wav` |
+| System audio | `system.wav` |
+| Metadata | `manifest.json` and `session.manifest.json` |
+| Preview | `preview.png` when a video track exists |
+
+Audio-only sessions are valid. In that case, no visual preview is generated.
 
 ## Application Images
 
@@ -64,44 +84,64 @@ Ideal for tutorials, classes, onboarding, technical support, and everyday record
 ## Architecture Overview
 
 ```
-Screen (WGC)  ──→  WgcScreenCapturePipe  ──→  NessMuxerWriter  ──→  screen.mkv
-Webcam (WinRT) ─→  MediaCaptureWebcamSession ──────────────────────→  webcam_seg_N.mp4 *
-Mic (WASAPI)  ──→  MicCaptureService  ─────────────────────────────→  mic_seg_N.wav *
-System (WASAPI)─→  SystemLoopbackService ──────────────────────────→  system_seg_N.wav *
+Screen (WGC)      ──→ WgcScreenCapturePipe       ──→ NessMuxerWriter ──→ screen.mkv
+Webcam (WinRT)    ──→ MediaCaptureWebcamSession  ─────────────────────→ webcam.mp4
+Mic (WASAPI)      ──→ MicCaptureService          ─────────────────────→ mic.wav
+System (WASAPI)   ──→ SystemLoopbackService      ─────────────────────→ system.wav
 
-* Multiple files per session — being resolved in P3.3/P3.4
+Project ingest    ──→ manifest.json              ──→ preview.png
 ```
 
-The screen track uses [NessMuxer](https://github.com/micilini/NessMuxer) as the encoding/muxing backend. The `NessMuxer.dll` is a standalone native C library — no FFmpeg, no external runtime required.
+The screen track uses [NessMuxer](https://github.com/micilini/NessMuxer) as the encoding and muxing backend. `NessMuxer.dll` is a standalone native C library for the screen pipeline.
 
 ## How to Run Locally
 
 **Requirements:**
+
 - Windows 10 or 11 (x64)
 - [Visual Studio Community 2022](https://visualstudio.microsoft.com/) with the **.NET desktop development** workload
+- .NET 8 SDK / runtime support
 
 **Steps:**
-1. Clone the repository
-2. Open `NessStudio.sln` in Visual Studio
-3. Build and run (`F5`)
 
-The `NessMuxer.dll` is already bundled under `NessStudio/Native/NessMuxer/` — no separate build step required.
+1. Clone the repository.
+2. Open `NessStudio.sln` in Visual Studio.
+3. Build and run the project with `F5`.
 
-## Known Issues
+The `NessMuxer.dll` native dependency is bundled under `NessStudio/Native/NessMuxer/` and is copied to the output directory during build.
 
-The following features are **not yet fully working** in the current version. They are tracked in the active development roadmap (P3/P4):
+## Active Roadmap
 
-| Issue | Status | Tracked in |
+The old P3/P4 status list has been consolidated. The current roadmap is focused on P5 and the remaining UX/export work.
+
+### Completed / Stabilized
+
+| Phase | Status | Notes |
 |---|---|---|
-| Webcam generates N separate files per session (one per segment) | 🔧 In progress | P3.3 |
-| Mic and system audio generate N separate files per session | 🔧 In progress | P3.4 |
-| `Direct3D11CaptureFramePool` is recreated on every resume (~75 MB extra per resume) | 🔧 In progress | P3.5 |
-| `session.manifest.json` still uses legacy `Segments[]` structure for webcam/audio | 🔧 In progress | P3.6 |
-| WGC indicator (yellow border) flickers on pause/resume | 📋 Planned | P4.0 |
-| Webcam LED may turn off on pause | 📋 Planned | P4.1 |
-| Resume delay (~700 ms) due to warmup | 📋 Planned | P4.2 |
+| P3.2 | ✅ Done | Native screen recording pipeline stabilized |
+| P3.3 | ✅ Done | Screen output consolidated as `screen.mkv` |
+| P3.4 | ✅ Done | Audio tracks consolidated as continuous `.wav` files |
+| P3.5 | ✅ Done | Recording lifecycle and memory behavior improved |
+| P3.6 | ✅ Done | Manifest updated for current track structure |
+| P5.1 | ✅ Done | Screen, webcam, microphone, and system audio can work as independent channels |
+| P5.2 | ✅ Done | Recording preview now prefers `Screen.File`, then falls back to `Webcam.File` through `manifest.json` |
 
-> The screen track (`.mkv`) is stable and produces a single continuous file per session, including across multiple pause/resume cycles.
+### Still Missing
+
+| Phase | Status | Goal |
+|---|---|---|
+| P5.3 | 📋 Next | Add a visual overlay for the selected Draw Area during recording |
+| P5.4 | 📋 Planned | Add export flow for final `.mp4` / `.mkv` files using FFmpeg |
+| P4.x | 📋 Optional polish | Keep-alive and warmup improvements for WGC, webcam, and resume behavior |
+
+## Known Limitations
+
+| Limitation | Status |
+|---|---|
+| Audio-only recordings do not generate a visual preview | Expected behavior |
+| Draw Area does not yet show a dedicated capture-region overlay while recording | Planned in P5.3 |
+| Final export/merge workflow is not available yet | Planned in P5.4 |
+| Some pause/resume visual polish may still be improved | Optional P4 work |
 
 ## Built With
 
@@ -115,11 +155,11 @@ The following features are **not yet fully working** in the current version. The
 
 ## Updates
 
-**Version 1.1.0** — Replaced the FFmpeg-based pipeline with a fully Windows-native capture architecture using **Windows Graphics Capture (WGC)** and **[NessMuxer](https://github.com/micilini/NessMuxer)**. This eliminates the FFmpeg subprocess dependency, resolves intermittent recording hangs, and dramatically reduces memory usage during pause/resume cycles.
+**Version 1.1.0** — Replaced the old FFmpeg-based recording path with a Windows-native capture architecture using **Windows Graphics Capture (WGC)** and **[NessMuxer](https://github.com/micilini/NessMuxer)**. This reduces dependency on external recording subprocesses and improves control over session metadata, pause/resume, and per-source recording behavior.
 
 ## Contributing
 
-Want to create new features for **NessStudio**? Create a new feature branch and submit a **Pull Request**. Feel free to open issues for bug fixes or feature requests.
+Want to create new features for **NessStudio**? Create a new feature branch and submit a **Pull Request**. Feel free to open issues for bug fixes, improvements, or feature requests.
 
 ## License
 
