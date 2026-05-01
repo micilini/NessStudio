@@ -464,9 +464,7 @@ namespace NessStudio.ViewModel.Helpers
                         return;
                     }
                 }
-                catch
-                {
-                }
+                catch { }
 
                 await Task.Delay(pollMs).ConfigureAwait(false);
             }
@@ -597,8 +595,6 @@ namespace NessStudio.ViewModel.Helpers
             WriteManifestNow(
                 screenParts,
                 webcamParts,
-                micParts,
-                sysParts,
                 screenPrimary,
                 webcamPrimary,
                 micPrimary,
@@ -633,22 +629,15 @@ namespace NessStudio.ViewModel.Helpers
                 .FirstOrDefault();
         }
 
-        private SessionManifest.AudioTrack BuildAudioManifest(string primaryFile, List<string> parts)
+        private SessionManifest.AudioTrack BuildAudioManifest(string primaryFile, int offsetMs = 0)
         {
             var info = SessionManifestWriter.ReadAudioInfo(primaryFile);
             if (info == null)
                 return null;
 
-            var segments = new List<SessionManifest.SegmentEntry>();
-            foreach (var p in parts ?? new List<string>())
-            {
-                var seg = SessionManifestWriter.BuildAudioSegment(p);
-                if (seg != null)
-                    segments.Add(seg);
-            }
+            if (offsetMs > 0)
+                info.OffsetMs = offsetMs;
 
-            info.Segments = segments;
-            info.Duration = SessionManifestWriter.SumDurations(segments);
             return info;
         }
 
@@ -697,52 +686,6 @@ namespace NessStudio.ViewModel.Helpers
             return SessionManifestWriter.FormatDuration(TimeSpan.FromSeconds(seconds));
         }
 
-        private List<SessionManifest.SegmentEntry> BuildVideoSegments(List<string> parts)
-        {
-            var result = new List<SessionManifest.SegmentEntry>();
-
-            foreach (var p in parts ?? new List<string>())
-            {
-                if (string.IsNullOrWhiteSpace(p) || !File.Exists(p))
-                    continue;
-
-                try
-                {
-                    long fileLength = new FileInfo(p).Length;
-                    if (fileLength <= 0)
-                    {
-                        DebugLog.Write($"[RecordAssist] BuildVideoSegments -> skip zero-byte file {p}");
-                        continue;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    DebugLog.Write($"[RecordAssist] BuildVideoSegments -> file length check failed {p}\n{ex}");
-                    continue;
-                }
-
-                try
-                {
-                    DebugLog.Write($"[RecordAssist] BuildVideoSegments -> reading {p}");
-                    var v = VideoInfoReader.ReadMp4Info(p);
-                    result.Add(new SessionManifest.SegmentEntry
-                    {
-                        File = Path.GetFileName(p),
-                        Duration = SessionManifestWriter.FormatDuration(v?.Duration ?? TimeSpan.Zero)
-                    });
-                    DebugLog.Write(
-                        $"[RecordAssist] BuildVideoSegments -> done {p} | " +
-                        $"duration={SessionManifestWriter.FormatDuration(v?.Duration ?? TimeSpan.Zero)}");
-                }
-                catch (Exception ex)
-                {
-                    DebugLog.Write($"[RecordAssist] BuildVideoSegments -> invalid/corrupt video skipped {p}\n{ex}");
-                }
-            }
-
-            return result;
-        }
-
         private void CleanupLegacyJoinArtifacts()
         {
             try
@@ -781,8 +724,6 @@ namespace NessStudio.ViewModel.Helpers
         private void WriteManifestNow(
             List<string> screenParts,
             List<string> webcamParts,
-            List<string> micParts,
-            List<string> sysParts,
             string screenPrimary,
             string webcamPrimary,
             string micPrimary,
@@ -794,21 +735,6 @@ namespace NessStudio.ViewModel.Helpers
 
             try
             {
-                DebugLog.Write("[RecordAssist] manifest -> BuildVideoSegments(screen) begin");
-                var screenSegments = BuildVideoSegments(screenParts);
-                DebugLog.Write("[RecordAssist] manifest -> BuildVideoSegments(screen) end");
-
-                DebugLog.Write("[RecordAssist] manifest -> BuildVideoSegments(webcam) begin");
-                var webcamSegments = BuildVideoSegments(webcamParts);
-                DebugLog.Write("[RecordAssist] manifest -> BuildVideoSegments(webcam) end");
-
-                if (screenSnapshot != null && screenSegments.Count > 0)
-                {
-                    var screenDuration = TryBuildScreenDuration(screenSnapshot.FrameCount, screenSnapshot.Fps);
-                    screenSegments[0].FrameCount = screenSnapshot.FrameCount;
-                    screenSegments[0].Duration = screenDuration;
-                }
-
                 DebugLog.Write("[RecordAssist] manifest -> ReadMp4Info(screenPrimary) begin");
                 var screenInfo = !string.IsNullOrWhiteSpace(screenPrimary) && File.Exists(screenPrimary)
                     ? VideoInfoReader.ReadMp4Info(screenPrimary)
@@ -839,7 +765,6 @@ namespace NessStudio.ViewModel.Helpers
                         Duration = screenInfo?.Duration != null && screenInfo.Duration > TimeSpan.Zero
                             ? SessionManifestWriter.FormatDuration(screenInfo.Duration)
                             : TryBuildScreenDuration(screenSnapshot?.FrameCount ?? 0, screenSnapshot?.Fps ?? 30),
-                        Segments = screenSegments,
                         Width = screenSnapshot?.Width ?? screenInfo?.Width ?? 0,
                         Height = screenSnapshot?.Height ?? screenInfo?.Height ?? 0,
                         Fps = screenSnapshot?.Fps ?? screenInfo?.Fps ?? 30,
@@ -862,24 +787,17 @@ namespace NessStudio.ViewModel.Helpers
                     Webcam = string.IsNullOrWhiteSpace(webcamPrimary) ? null : new SessionManifest.VideoTrack
                     {
                         File = Path.GetFileName(webcamPrimary),
-                        Duration = webcamSegments.Count > 0
-                            ? SessionManifestWriter.SumDurations(webcamSegments)
-                            : SessionManifestWriter.FormatDuration(webcamInfo?.Duration ?? TimeSpan.Zero),
-                        Segments = webcamSegments,
+                        Duration = SessionManifestWriter.FormatDuration(webcamInfo?.Duration ?? TimeSpan.Zero),
                         Width = webcamInfo?.Width ?? 0,
                         Height = webcamInfo?.Height ?? 0,
                         Fps = webcamInfo?.Fps ?? 30,
                         ContainerKind = "mp4",
-                        PixelFormat = null,
-                        FrameCount = null,
-                        StrideY = null,
-                        StrideUV = null,
                         IsRawIntermediate = false
                     },
 
                     PauseIntervals = pauseIntervals,
-                    Mic = BuildAudioManifest(micPrimary, micParts),
-                    System = BuildAudioManifest(sysPrimary, sysParts)
+                    Mic = BuildAudioManifest(micPrimary),
+                    System = BuildAudioManifest(sysPrimary, offsetMs: 500)
                 };
 
                 SessionManifestWriter.WriteJson(_paths.BaseDir, manifest);
