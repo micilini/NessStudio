@@ -63,10 +63,10 @@ namespace NessStudio.Recording.Windows
         public const int NESS_ENCODER_NVENC = 3;
         public const int NESS_ENCODER_VIDEOTOOLBOX = 4;
 
-        
-        
-        
-        
+
+
+
+
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
         public struct NessMuxerConfig
         {
@@ -78,12 +78,14 @@ namespace NessStudio.Recording.Windows
             public int fps;
             public int bitrate_kbps;
             public int encoder_type;
+            public int codec_type;
+            public int entropy_mode;
         }
 
-        
-        
-        
-        
+
+
+
+
         [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)]
         public static extern int ness_muxer_open(out IntPtr muxer, ref NessMuxerConfig config);
 
@@ -94,10 +96,11 @@ namespace NessStudio.Recording.Windows
         [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)]
         public static extern int ness_muxer_write_frame(IntPtr muxer, IntPtr nv12_data, int nv12_size);
 
-        
-        
-        
-        
+
+        [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int ness_muxer_write_frame_pts(IntPtr muxer, IntPtr nv12_data, int nv12_size, long pts_hns);
+
+
         [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)]
         public static extern int ness_muxer_close(IntPtr muxer);
 

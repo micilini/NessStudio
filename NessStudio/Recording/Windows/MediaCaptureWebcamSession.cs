@@ -1,17 +1,18 @@
-﻿using NessStudio.ViewModel.Helpers;
-using System;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Windows.Media.Imaging;
-using global::Windows.Devices.Enumeration;
+﻿using global::Windows.Devices.Enumeration;
 using global::Windows.Graphics.DirectX.Direct3D11;
 using global::Windows.Graphics.Imaging;
 using global::Windows.Media.Capture;
 using global::Windows.Media.Capture.Frames;
 using global::Windows.Media.MediaProperties;
 using global::Windows.Storage;
+using NessStudio.ViewModel.Helpers;
+using System;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Media.Imaging;
+using Windows.Media.Devices;
 
 namespace NessStudio.Recording.Windows
 {
@@ -369,6 +370,52 @@ namespace NessStudio.Recording.Windows
                 $"waited={timeoutWaitedMs:F0}ms | previewFrames={_previewFramesObserved} | " +
                 $"firstPreviewFrame={_firstPreviewFrameAtUtc?.ToString("O") ?? "null"} | " +
                 $"previewStable={_previewStableAtUtc?.ToString("O") ?? "null"}");
+        }
+
+        public async Task PauseRecordingAsync()
+        {
+            await _gate.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                if (_recording == null || !IsRecording)
+                    return;
+
+                await _recording.PauseAsync(MediaCapturePauseBehavior.RetainHardwareResources).AsTask().ConfigureAwait(false);
+                IsRecording = false;
+
+                DebugLog.Write($"[WebcamSession] recording paused | output={_preparedOutputPath}");
+            }
+            catch (Exception ex)
+            {
+                DebugLog.Write("[WebcamSession] PauseRecordingAsync warning:\n" + ex);
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+
+        public async Task ResumeRecordingAsync()
+        {
+            await _gate.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                if (_recording == null || IsRecording)
+                    return;
+
+                await _recording.ResumeAsync().AsTask().ConfigureAwait(false);
+                IsRecording = true;
+
+                DebugLog.Write($"[WebcamSession] recording resumed | output={_preparedOutputPath}");
+            }
+            catch (Exception ex)
+            {
+                DebugLog.Write("[WebcamSession] ResumeRecordingAsync warning:\n" + ex);
+            }
+            finally
+            {
+                _gate.Release();
+            }
         }
 
         public async Task StopRecordingAsync(bool keepSessionAlive = true)

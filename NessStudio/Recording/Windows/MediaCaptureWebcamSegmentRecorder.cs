@@ -37,6 +37,24 @@ namespace NessStudio.Recording.Windows
             DebugLog.Write($"[Webcam] StartAsync end | armedAfter={armedAfterMs:F0}ms | output={outputPath}");
         }
 
+        public async Task PauseAsync()
+        {
+            if (!IsRecording) return;
+
+            DebugLog.Write("[Webcam] PauseAsync begin");
+            await _session.PauseRecordingAsync().ConfigureAwait(false);
+            DebugLog.Write("[Webcam] PauseAsync end");
+        }
+
+        public async Task ResumeAsync()
+        {
+            if (IsRecording) return;
+
+            DebugLog.Write("[Webcam] ResumeAsync begin");
+            await _session.ResumeRecordingAsync().ConfigureAwait(false);
+            DebugLog.Write("[Webcam] ResumeAsync end");
+        }
+
         public async Task StopAsync()
         {
             if (!IsPrepared && !IsRecording)
