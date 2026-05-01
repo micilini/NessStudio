@@ -1,4 +1,4 @@
-﻿using NessStudio.Models;
+using NessStudio.Models;
 using NessStudio.Recording;
 using System;
 using System.Collections.Generic;
@@ -86,6 +86,7 @@ namespace NessStudio.ViewModel.Helpers
             }
 
             long sizeBytes = GetFolderSize(projectFolder);
+            long durationMs = ResolveManifestDurationMs(projectFolder);
 
             var dirInfo = new DirectoryInfo(projectFolder);
 
@@ -95,6 +96,7 @@ namespace NessStudio.ViewModel.Helpers
                 ProjectFolderPath = projectFolder,
                 ThumbnailPath = File.Exists(previewPath) ? previewPath : string.Empty,
                 FileSizeBytes = sizeBytes,
+                DurationMs = durationMs,
                 CreatedAt = DateTime.Now,
                 UpdatedAt = DateTime.Now,
                 LastOpenedAt = DateTime.Now
@@ -194,6 +196,36 @@ namespace NessStudio.ViewModel.Helpers
                 : Path.Combine(projectFolder, fileName);
 
             return File.Exists(fullPath) ? fullPath : null;
+        }
+
+        private static long ResolveManifestDurationMs(string projectFolder)
+        {
+            var manifestPaths = new[]
+            {
+                Path.Combine(projectFolder, "manifest.json"),
+                Path.Combine(projectFolder, "session.manifest.json")
+            };
+
+            foreach (var manifestPath in manifestPaths)
+            {
+                if (!File.Exists(manifestPath))
+                    continue;
+
+                try
+                {
+                    var json = File.ReadAllText(manifestPath);
+                    var manifest = JsonSerializer.Deserialize<SessionManifest>(json);
+
+                    if (manifest?.DurationMs != null && manifest.DurationMs.Value > 0)
+                        return manifest.DurationMs.Value;
+                }
+                catch (Exception ex)
+                {
+                    DebugLog.Write($"[ProjectIngest] manifest duration lookup failed | manifest={manifestPath}\n" + ex);
+                }
+            }
+
+            return 0;
         }
 
         private static long GetFolderSize(string folder)
