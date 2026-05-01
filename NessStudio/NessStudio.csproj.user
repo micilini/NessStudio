@@ -16,6 +16,9 @@
     <Compile Update="View\AboutScreen\AboutScreenWindow.xaml.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Update="View\DrawAreaScreen\CaptureOverlayWindow.xaml.cs">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Update="View\DrawAreaScreen\DrawAreaScreenWindow.xaml.cs">
       <SubType>Code</SubType>
     </Compile>
