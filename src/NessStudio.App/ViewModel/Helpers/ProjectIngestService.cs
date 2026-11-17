@@ -53,6 +53,8 @@ public static class ProjectIngestService
     }
     private static string? ResolvePreviewVideoFile(string directory,SessionManifest manifest)
     {
+        if (manifest.Version == 3 && !manifest.HasProgram && !manifest.HasScreen && !manifest.HasWebcam)
+            return null;
         foreach(string? file in new[]{manifest.PrimaryAsset,manifest.Program?.File,manifest.Screen?.File,manifest.Webcam?.File})
         {string? path=ProjectManifestStore.ExistingPath(directory,file);if(path is not null&&new[]{".mkv",".mp4",".mov",".avi"}.Contains(Path.GetExtension(path).ToLowerInvariant()))return path;}
         if(manifest.Version==2)

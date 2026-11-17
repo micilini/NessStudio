@@ -181,8 +181,7 @@ namespace NessStudio.ViewModel
         {
             try
             {
-                string documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                string targetPath = System.IO.Path.Combine(documents, "NessStudio", "Recordings");
+                string targetPath = ((App)Application.Current).Options.RecordingsDirectory;
                 if (!Directory.Exists(targetPath))
                 {
                     Directory.CreateDirectory(targetPath);

@@ -9,6 +9,7 @@
 // clang-format off
 #include <audioclient.h>
 #include <avrt.h>
+#include <initguid.h>
 #include <mmdeviceapi.h>
 #include <functiondiscoverykeys_devpkey.h>
 #include <ksmedia.h>
@@ -287,6 +288,88 @@ public:
   }
   bool finalized() const { return finalized_; }
 };
+// Shared capture can deliver converted PCM while packet positions still use
+// the endpoint's hardware sample rate. Keep that clock separate from PCM indices.
+class PacketPosition {
+  uint32_t client_rate_{}, endpoint_rate_{}, position_rate_{}, previous_frames_{};
+  uint64_t anchor_raw_{}, anchor_pcm_{}, previous_raw_{}, next_pcm_{}, previous_qpc_{};
+  bool initialized_{}, selected_{}, initial_discontinuity_{}, previous_valid_{};
+public:
+  void configure(uint32_t client, uint32_t endpoint) {
+    client_rate_ = position_rate_ = client;
+    endpoint_rate_ = endpoint ? endpoint : client;
+    selected_ = endpoint_rate_ == client_rate_;
+  }
+  uint32_t rate() const { return position_rate_; }
+  bool selected() const { return selected_; }
+  uint64_t map(uint64_t raw, uint32_t frames, uint64_t qpc,
+               bool discontinuity, bool valid) {
+    if (!initialized_) {
+      initialized_ = true;
+      anchor_raw_ = previous_raw_ = raw;
+      previous_frames_ = frames;
+      next_pcm_ = frames;
+      previous_qpc_ = qpc;
+      previous_valid_ = valid;
+      initial_discontinuity_ = discontinuity;
+      return 0;
+    }
+    if (raw < previous_raw_)
+      throw Error(NSS_E_IO, NSS_STAGE_AUDIO, 0, "Audio device position moved backwards");
+    const auto delta = raw - previous_raw_;
+    if (!selected_) {
+      const auto converted = scale_floor(delta, client_rate_, endpoint_rate_);
+      const auto tolerance = (client_rate_ + endpoint_rate_ - 1) / endpoint_rate_;
+      const bool regular = converted + tolerance >= previous_frames_ &&
+                           converted <= uint64_t(previous_frames_) + tolerance;
+      // A converter may expose a short initial packet after its startup cut.
+      // Accept at most 1ms here, once, only with the initial discontinuity flag.
+      const bool initial_cut = initial_discontinuity_ && converted >= previous_frames_ &&
+                               converted - previous_frames_ <= client_rate_ / 1000;
+      const bool correlated = valid && previous_valid_ && qpc >= previous_qpc_ &&
+          std::abs(double(qpc - previous_qpc_) - double(delta) * hns_per_second / endpoint_rate_) <= 20000;
+      if (delta != previous_frames_ && (regular || initial_cut) && correlated) {
+        position_rate_ = endpoint_rate_;
+        if (initial_cut) { anchor_raw_ = raw; anchor_pcm_ = next_pcm_; }
+      }
+      selected_ = true;
+    }
+    const auto relative = scale_floor(raw - anchor_raw_, client_rate_, position_rate_);
+    if (relative > (std::numeric_limits<uint64_t>::max)() - anchor_pcm_)
+      throw Error(NSS_E_IO, NSS_STAGE_AUDIO, 0, "Audio sample position overflow");
+    auto pcm = anchor_pcm_ + relative;
+    if (position_rate_ != client_rate_) {
+      // Test against the cumulative anchor so rounding cannot conceal a small
+      // loss on every packet. One hardware sample is the position resolution.
+      const auto tolerance = (client_rate_ + position_rate_ - 1) / position_rate_;
+      if ((pcm >= next_pcm_ ? pcm - next_pcm_ : next_pcm_ - pcm) <= tolerance)
+        pcm = next_pcm_;
+    }
+    if (pcm > (std::numeric_limits<uint64_t>::max)() - frames)
+      throw Error(NSS_E_IO, NSS_STAGE_AUDIO, 0, "Audio sample position overflow");
+    next_pcm_ = pcm + frames;
+    previous_raw_ = raw;
+    previous_frames_ = frames;
+    previous_qpc_ = qpc;
+    previous_valid_ = valid;
+    return pcm;
+  }
+};
+uint32_t endpoint_sample_rate(IMMDevice *device, uint32_t fallback) {
+  ComPtr<IPropertyStore> properties;
+  if (FAILED(device->OpenPropertyStore(STGM_READ, &properties))) return fallback;
+  PROPVARIANT value{};
+  uint32_t rate = fallback;
+  if (SUCCEEDED(properties->GetValue(PKEY_AudioEngine_DeviceFormat, &value)) &&
+      value.vt == VT_BLOB && value.blob.pBlobData && value.blob.cbSize >= sizeof(WAVEFORMATEX)) {
+    WAVEFORMATEX format{};
+    std::memcpy(&format, value.blob.pBlobData, sizeof(format));
+    if (format.nSamplesPerSec >= 8000 && format.nSamplesPerSec <= 192000)
+      rate = format.nSamplesPerSec;
+  }
+  PropVariantClear(&value);
+  return rate;
+}
 class Stream {
   Json plan_, report_, mix_format_, packet_timestamps_ = Json::array(),
                                     recent_timestamps_ = Json::array();
@@ -312,6 +395,7 @@ class Stream {
       timestamp_errors_{}, idle_samples_{};
   int64_t last_qpc_{}, last_valid_qpc_{};
   ClockRate clock_rate_;
+  PacketPosition packet_position_;
   uint64_t last_valid_position_{}, previous_frames_{}, idle_intervals_{},
       lost_samples_{}, terminal_pad_{}, keepalive_frames_{}, exact_silence_outputs_{},
       pcm_zero_outputs_{}, filtered_outputs_{};
@@ -353,6 +437,7 @@ class Stream {
                                       ? "mono duplicated to L/R"
                                       : "L/R preserved"},
                {"deviceMixFormat", mix_format_},
+               {"packetPositionRate", packet_position_.rate()},
                {"wasapiFormatConversion", false},
                {"reportPublishedQpcHns", now},
                {"regularReportIntervalMs", 1000},
@@ -476,6 +561,10 @@ class Stream {
         qpc > static_cast<uint64_t>((std::numeric_limits<int64_t>::max)()))
       throw Error(NSS_E_IO, NSS_STAGE_AUDIO, 0,
                   "WASAPI QPC timestamp exceeds signed 100ns domain");
+    const auto raw_position = position;
+    position = packet_position_.map(position, frames, qpc,
+        (flags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY) != 0,
+        (flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR) == 0);
     if (flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR) {
       ++timestamp_errors_;
       if (!last_valid_qpc_ || position < last_valid_position_ ||
@@ -536,8 +625,8 @@ class Stream {
       silent_ += frames;
     // Extrapolated timestamps may preserve a bounded damaged packet, but must
     // not train the estimator from its own previous correction.
-    if (!(flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR))
-      clock_rate_.observe(position, static_cast<int64_t>(qpc), rate_);
+    if (!(flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR) && packet_position_.selected())
+      clock_rate_.observe(raw_position, static_cast<int64_t>(qpc), packet_position_.rate());
     if (const auto measured=clock_rate_.ppm()) {
       observed_ppm_ = *measured;
       if (clock_rate_.span_seconds() >= 5 && std::abs(observed_ppm_) > 200)
@@ -627,13 +716,13 @@ class Stream {
       const std::unique_ptr<WAVEFORMATEX, decltype(&CoTaskMemFree)> owner(
           raw, CoTaskMemFree);
       mix_format_ = Format(raw).json();
-      // Keep GetBuffer device positions and frames in the endpoint's actual mix
-      // format. Engine DSP owns rate/channel conversion, including 44.1 -> 48
-      // kHz.
+      // Capture PCM in the mix format. Packet positions may retain the physical
+      // endpoint clock when Windows applies conversion before delivering PCM.
       const DWORD streamflags = AUDCLNT_STREAMFLAGS_EVENTCALLBACK |
                                 (loopback_ ? AUDCLNT_STREAMFLAGS_LOOPBACK : 0);
       const Format format(raw);
       rate_ = format.rate;
+      packet_position_.configure(rate_, endpoint_sample_rate(device.Get(), rate_));
       hr(client->Initialize(AUDCLNT_SHAREMODE_SHARED, streamflags, 2000000, 0,
                             raw, nullptr),
          "WASAPI shared initialization failed");
@@ -908,7 +997,8 @@ public:
   }
   static Json fixture(const std::string &filename, uint32_t rate,
                       uint32_t channels, bool pause, double drift = 0,
-                      int fault = 0) {
+                      int fault = 0, uint32_t position_rate = 0,
+                      uint32_t endpoint_rate = 0, bool partial_first = false) {
     Stream s({{"path", filename},
               {"kind", "microphone"},
               {"endpointId", "qualification-only"}});
@@ -920,6 +1010,8 @@ public:
     native.nBlockAlign = static_cast<WORD>(channels * 4);
     const Format format(&native);
     s.rate_ = rate;
+    if (!position_rate) position_rate = rate;
+    s.packet_position_.configure(rate, endpoint_rate ? endpoint_rate : position_rate);
     s.mix_format_ = format.json();
     SessionClock clock;
     const int64_t epoch = 100000000, wall = 60000000;
@@ -938,12 +1030,14 @@ public:
           epoch + 2500000 +
           static_cast<int64_t>(double(pos) * hns_per_second /
                                (rate * (1 + drift * 1e-6))));
-      uint64_t position = pos;
+      uint64_t position = scale_floor(pos, position_rate, rate);
       DWORD flags{};
+      const uint32_t frames = partial_first && pos == 0 ? quantum - 17 : quantum;
+      if (partial_first && pos == 0) flags = AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY;
       if (fault == 1 && pos == 0)
         flags = AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR;
       if (fault == 2 && pos == quantum * 10)
-        position += quantum;
+        position += position_rate / 100;
       if (fault == 3 && pos == quantum * 10)
         qpc += hns_per_second;
       if (fault == 4 && pos == quantum * 10)
@@ -955,6 +1049,12 @@ public:
         s.wave_.invalidate_for_test();
       if (fault == 7 && pos == 0)
         qpc = (std::numeric_limits<uint64_t>::max)();
+      if (fault == 8 && pos == quantum * 10)
+        position -= position_rate / 50;
+      if (fault == 9 && pos == quantum * 10)
+        flags = AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY;
+      if (fault == 10 && pos >= quantum * 10)
+        position += pos / quantum - 9;
       for (uint32_t i = 0; i < quantum; ++i) {
         const auto at = qpc + static_cast<uint64_t>(sample_time(i, rate));
         const double hz = pause && at >= uint64_t(epoch + 12345678) &&
@@ -966,7 +1066,7 @@ public:
         for (uint32_t c = 0; c < channels; ++c)
           std::memcpy(copy.data() + (size_t(i) * channels + c) * 4, &value, 4);
       }
-      s.packet(copy, quantum, flags, position, qpc, format);
+      s.packet(copy, frames, flags, position, qpc, format);
     }
     s.flush_segment(s.base_ + s.data_.size(), true);
     s.publish(format);
@@ -1239,6 +1339,35 @@ Json qualify(const std::string &scope, const std::string &directory) {
         check(result.at("finalized") == true, "WAV did not finalize");
         cases.push_back(std::move(result));
       }
+  } else if (scope == "position-domain") {
+    for (const auto rates : {std::array<uint32_t, 3>{48000, 16000, 16000},
+                            {16000, 48000, 48000}, {44100, 48000, 48000},
+                            {48000, 44100, 44100}, {48000, 48000, 16000}}) {
+      for (const double drift : {-150., 0., 150.}) {
+        auto result = Stream::fixture(filename(), rates[0], 2, false, drift, 0, rates[1], rates[2]);
+        check(result.at("packetPositionRate") == rates[1], "Packet clock domain was misidentified");
+        check(result.at("lostSamples") == 0 && result.at("deviceGapSamples") == 0,
+              "Converted packets were mistaken for lost PCM");
+        check(result.at("outputSamples") == 288000 && result.at("finalized") == true,
+              "Converted packet stream did not finalize at the common cut");
+        check(std::abs(result.at("observedDriftPpm").get<double>() - drift) < 1,
+              "Converted packet clock changed drift measurement");
+        cases.push_back(std::move(result));
+      }
+    }
+    auto partial = Stream::fixture(filename(), 48000, 2, false, 0, 0, 16000, 16000, true);
+    check(partial.at("inputSamples") == 288000 - 17 && partial.at("lostSamples") == 0 &&
+          partial.at("deviceGapSamples") == 0 && partial.at("packetPositionRate") == 16000,
+          "Initial converter cut discarded or invented PCM samples");
+    cases.push_back(std::move(partial));
+    for (int fault : {1, 2, 3, 7, 8, 9, 10}) {
+      bool failed{};
+      try { Stream::fixture(filename(), 48000, 2, false, 0, fault, 16000); }
+      catch (const Error &e) { failed = e.stage == NSS_STAGE_AUDIO; }
+      check(failed, "Converted clock concealed a real audio fault");
+      cases.push_back({{"expectedFault", fault}, {"passed", true}});
+    }
+    cases.push_back(Stream::fixture(filename(), 48000, 2, false, 0, 4, 16000));
   } else if (scope == "clock") {
     for (double ppm : {-150., 150.}) {
       auto r = Stream::fixture(filename(), 48000, 2, false, ppm);

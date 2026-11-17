@@ -11,9 +11,8 @@ namespace NessStudio.ViewModel.Helpers
     {
         public static string EnsureDefaultRoot()
         {
-            var root = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                "NessStudio", "Recordings");
+            var root = (System.Windows.Application.Current as App)?.Options.RecordingsDirectory
+                ?? Composition.ApplicationOptions.ForCurrentUser().RecordingsDirectory;
             Directory.CreateDirectory(root);
             return root;
         }

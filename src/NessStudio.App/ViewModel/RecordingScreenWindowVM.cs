@@ -277,69 +277,13 @@ namespace NessStudio.ViewModel
             get => _selectedExecutionMode;
             set
             {
-                if (!Enum.IsDefined(value) || _startBusy || _isRecording || _isSavingRecording) return;
+                if (!Enum.IsDefined(value) || _startBusy || _isRecording || _isSavingRecording || _selectedExecutionMode == value) return;
                 _selectedExecutionMode = value;
                 System.Windows.Media.RenderOptions.ProcessRenderMode = value == RecordingExecutionMode.FullSoftware
                     ? System.Windows.Interop.RenderMode.SoftwareOnly : ((App)System.Windows.Application.Current).Options.PresentationMode;
                 if (_isLoaded) UpdateIdlePreview();
                 OnPropertyChanged(nameof(SelectedExecutionMode)); OnPropertyChanged(nameof(CurrentSettingsSummary));
             }
-        }
-        public Array OutputModeOptions { get; } = Enum.GetValues<RecordingOutputMode>();
-        public Array SceneLayoutOptions { get; } = Enum.GetValues<RecordingSceneLayout>();
-        public ObservableCollection<RecordingPresetOption> ProgramCanvasOptions { get; } = new()
-        {
-            new RecordingPresetOption { Label="Default source size · HD program",Value=0 },
-            new RecordingPresetOption { Label="HD 720p · all video tracks",Value=1 },
-            new RecordingPresetOption { Label="SD 360p · all video tracks",Value=2 }
-        };
-        private int _selectedProgramCanvas;
-        public int SelectedProgramCanvas
-        {
-            get=>_selectedProgramCanvas;
-            set { if(!CanChangeRecordingPreferences() || value is <0 or >2)return;_selectedProgramCanvas=value;OnPropertyChanged(nameof(SelectedProgramCanvas));if(_isLoaded)UpdateIdlePreview(); }
-        }
-        private RecordingOutputMode _selectedOutputMode;
-        public RecordingOutputMode SelectedOutputMode
-        {
-            get => _selectedOutputMode;
-            set { if (!CanChangeRecordingPreferences()) return; _selectedOutputMode=value; OnPropertyChanged(nameof(SelectedOutputMode)); OnPropertyChanged(nameof(OutputModeSummary)); }
-        }
-        public string OutputModeSummary => SelectedOutputMode switch
-        {
-            RecordingOutputMode.Program => "Program video only; independent video sources are not retained.",
-            RecordingOutputMode.ProgramAndSources => "Program + independent sources. With screen and camera: select SD 360p for all videos in CPU, or HD 720p for all videos in GPU.",
-            _ => "Independent sources retained for editing; program is composed during export."
-        };
-        private RecordingSceneLayout _selectedSceneLayout=RecordingSceneLayout.PictureInPicture;
-        public RecordingSceneLayout SelectedSceneLayout
-        {
-            get => _selectedSceneLayout;
-            set { _selectedSceneLayout=value; OnPropertyChanged(nameof(SelectedSceneLayout)); _=UpdateSceneAsync(); }
-        }
-        private bool _mirrorCameraProgram;
-        public bool MirrorCameraProgram { get => _mirrorCameraProgram; set { _mirrorCameraProgram=value;OnPropertyChanged(nameof(MirrorCameraProgram));_=UpdateSceneAsync(); } }
-        private string? _sceneError;
-        public string? SceneError { get => _sceneError; private set { _sceneError=value;OnPropertyChanged(nameof(SceneError)); } }
-        private RecordingScene? CreateScene(int width=0,int height=0)
-        {
-            if (!IsScreenEnabled && !IsWebcamEnabled) return null;
-            if(width==0){width=SelectedProgramCanvas==2?640:1280;height=SelectedProgramCanvas==2?360:720;}
-            var layout = !IsScreenEnabled ? RecordingSceneLayout.Camera : !IsWebcamEnabled ? RecordingSceneLayout.Screen : SelectedSceneLayout;
-            return RecordingScenes.Create(layout,width,height,IsScreenEnabled,IsWebcamEnabled,MirrorCameraProgram)
-                with { FpsNum = SelectedRecordingFps };
-        }
-        private async Task UpdateSceneAsync()
-        {
-            if (!_isLoaded || _isClosing || _startBusy) return;
-            try
-            {
-                var scene=CreateScene(); if(scene is null)return;
-                if (_rec?.State is RecordingState.Recording or RecordingState.Paused) await _rec.UpdateSceneAsync(scene);
-                else await _previews.UpdateSceneAsync(scene);
-                SceneError=null;
-            }
-            catch(Exception error) { SceneError=error.Message; DebugLog.Write("[NativeScene] "+error); }
         }
         public string CurrentSettingsSummary => $"{SelectedRecordingFps} fps • {SelectedRecordingTimerSeconds}s • {SelectedExecutionMode switch { RecordingExecutionMode.FullSoftware => "CPU", RecordingExecutionMode.RequireGpuResidentHardware => "GPU", RecordingExecutionMode.GpuWithSoftwareEncoding => "GPU + CPU", _ => "Auto" }}";
         public ObservableCollection<RecordingPresetOption> FpsOptions { get; } = new();
@@ -721,7 +665,6 @@ namespace NessStudio.ViewModel
             SelectedExecutionMode = (RecordingExecutionMode)mode;
             ((App)System.Windows.Application.Current).RecordingExecutionMode = SelectedExecutionMode;
             SaveRecordingPreferencesToDisk(); RefreshRecordingPresetSelections(); CloseSettingsMenus();
-            UpdateIdlePreview();
         }
         private RecordingRuntimeOptions BuildRuntimeOptions()
         {
@@ -881,7 +824,7 @@ namespace NessStudio.ViewModel
             try
             {
                 await _previews.UpdateIdleAsync(IsScreenEnabled ? LegacyGeometry.Describe(SelectedScreen) : null,
-                    IsWebcamEnabled ? SelectedCameraFormat : null, SelectedExecutionMode, CreateScene());
+                    IsWebcamEnabled ? SelectedCameraFormat : null, SelectedExecutionMode);
             }
             catch (Exception error) { DebugLog.Write("[NativePreview] " + error); }
         }
@@ -1077,6 +1020,7 @@ namespace NessStudio.ViewModel
             {
                 _startBusy = false;
                 RefreshRecordingCommands();
+                if (!_isRecording && !_isClosing) UpdateIdlePreview();
                 if (_isRecording && _rec?.State == RecordingState.Failed && !_stopStarted) BtnStop_Click();
             }
         }
@@ -1135,13 +1079,19 @@ namespace NessStudio.ViewModel
             }
 
             string outDir = Path.Combine(
-                ((App)System.Windows.Application.Current).Options.DocumentsDirectory,
-                "Recordings",
+                ((App)System.Windows.Application.Current).Options.RecordingsDirectory,
                 DateTime.Now.ToString("yyyyMMdd_HHmmss_fff") + "_" + Guid.NewGuid().ToString("N")[..6]);
 
             try
             {
                 Directory.CreateDirectory(outDir);
+                // Verify storage before opening devices or starting the countdown.
+                using (var probe = new FileStream(Path.Combine(outDir, ".write-check"), FileMode.CreateNew,
+                    FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose))
+                {
+                    probe.WriteByte(0);
+                    probe.Flush(flushToDisk: true);
+                }
                 OutDirFolder = outDir;
                 var runtimeOptions = BuildRuntimeOptions();
 
@@ -1178,9 +1128,8 @@ namespace NessStudio.ViewModel
 
                 DebugLog.Write($"[VM] Creating recorder | outDir={outDir} | crop={(crop.HasValue ? crop.Value.ToString() : "null")}");
                 await _previews.SuspendAsync();
-                _rec = _recorderFactory.Create(new RecordingRequest(outDir, targets, LegacyGeometry.Describe(crop), runtimeOptions, SelectedExecutionMode,
-                    Video: SelectedProgramCanvas==0 ? null : new RecordingVideoOptions(SelectedProgramCanvas==2?640:1280,SelectedProgramCanvas==2?360:720,SelectedExecutionMode==RecordingExecutionMode.FullSoftware?6000000:12000000),
-                    Camera: IsWebcamEnabled ? SelectedCameraFormat : null, OutputMode: SelectedOutputMode, Scene: CreateScene()));
+                _rec = _recorderFactory.Create(new RecordingRequest(outDir, targets, LegacyGeometry.Describe(crop), runtimeOptions,
+                    SelectedExecutionMode, Camera: IsWebcamEnabled ? SelectedCameraFormat : null));
                 _previews.Adopt(_rec);
                 _rec.StateChanged += RecordingService_StateChanged;
 
@@ -1254,7 +1203,7 @@ namespace NessStudio.ViewModel
                 RecordingError = ex.Message;
                 CurrentRecordingState = RecordingState.Failed;
                 OnPropertyChanged(nameof(RecordingError)); OnPropertyChanged(nameof(CurrentRecordingState));
-                DebugLog.Write("[VM] BtnRec_Click ERROR:\n" + ex);
+                DebugLog.WriteError("[VM] BtnRec_Click ERROR:\n" + ex);
 
                 try { _recTimer.Stop(); } catch { }
                 try { if (_rec is not null) { _rec.StateChanged -= RecordingService_StateChanged; await _rec.DisposeAsync(); } } catch (Exception cleanupError) { DebugLog.Write("[RecordingService] cleanup: " + cleanupError); }

@@ -1,10 +1,12 @@
 using System;
 using System.Diagnostics;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using NessStudio.Interop.Native;
 using NessStudio.Recording;
 using NessStudio.ViewModel.Helpers;
@@ -26,7 +28,10 @@ public sealed class NativePreviewControl : Image
     /// <summary>Gets or sets the native source identity.</summary>
     public ulong SourceId { get => (ulong)GetValue(SourceIdProperty); set => SetValue(SourceIdProperty,value); }
     private NativePreview? _preview;
-    private NativePreviewFrame? _displayed;
+    private NativePreviewFrame? _pendingGpuFrame;
+    private D3DPreviewSurface? _surface;
+    private bool _gpuWriteLocked;
+    private readonly DispatcherTimer _copyPoll;
     private D3DImage? _image;
     private WriteableBitmap? _bitmap;
     private long _lastRender;
@@ -52,6 +57,8 @@ public sealed class NativePreviewControl : Image
     /// <summary>Initializes a presenter whose lifetime follows visibility, independently of native recording.</summary>
     public NativePreviewControl()
     {
+        _copyPoll = new DispatcherTimer(DispatcherPriority.Render, Dispatcher) { Interval = TimeSpan.FromMilliseconds(1) };
+        _copyPoll.Tick += PollGpuCopy;
         Loaded += (_,_) => UpdateRendering();
         Unloaded += (_,_) => { Unsubscribe(); Detach(); };
         IsVisibleChanged += (_,_) => UpdateRendering();
@@ -66,10 +73,15 @@ public sealed class NativePreviewControl : Image
     }
     private void OnPresentationChanged(object? sender,EventArgs args)
     {
-        if (!Dispatcher.CheckAccess()) { if (!Dispatcher.HasShutdownStarted) Dispatcher.BeginInvoke(RequestRebind); return; }
+        if (!Dispatcher.CheckAccess())
+        {
+            if (!Dispatcher.HasShutdownStarted) Dispatcher.BeginInvoke(() => OnPresentationChanged(sender, args));
+            return;
+        }
+        if (args is PreviewSourceChangedEventArgs change && change.SourceId != 0 && change.SourceId != SourceId) return;
         RequestRebind();
     }
-    private void RequestRebind() { Detach(); _rebind = true; UpdateRendering(); }
+    private void RequestRebind() { Detach(); PresentationError = null; _rebind = true; UpdateRendering(); }
     private void UpdateRendering()
     {
         try
@@ -78,7 +90,7 @@ public sealed class NativePreviewControl : Image
             _preview?.SetEnabled(visible);
             if (visible)
             { if (!_subscribed) { CompositionTarget.Rendering += RenderFrame; _subscribed = true; } }
-            else { Unsubscribe(); ClearPresentation(); }
+            else { Unsubscribe(); Detach(); PresentationError = null; }
         }
         catch (Exception error)
         { PresentationError = error.Message; DebugLog.Write("[NativePreview] " + error); Detach(); }
@@ -92,11 +104,12 @@ public sealed class NativePreviewControl : Image
     private void RenderFrame(object? sender,EventArgs args)
     {
         long now = Stopwatch.GetTimestamp();
-        if (now-_lastRender < Stopwatch.Frequency/15) return;
-        _lastRender = now;
         try
         {
-            if (_rebind) { Detach(); _preview = Workspace?.Attach(SourceId); _rebind = false; PresentationError = _preview is null ? Workspace?.Error : null; }
+            if (_pendingGpuFrame is not null && !CompleteGpuCopy()) return;
+            if (now-_lastRender < Stopwatch.Frequency/15) return;
+            _lastRender = now;
+            if (_rebind) { Detach(); _preview = Workspace?.Attach(SourceId); _rebind = false; PresentationError = _preview is null ? Workspace?.GetError(SourceId) : null; }
             var next = _preview?.TryAcquire();
             if (next is null) return;
             try
@@ -112,47 +125,94 @@ public sealed class NativePreviewControl : Image
                 _bitmap.WritePixels(new Int32Rect(0,0,next.Width,next.Height),next.Pointer,next.Bytes,next.Stride);
                 CpuWriteBytes += next.Bytes;
                 Source = _bitmap; PresentationKind = "CPU BGRA WriteableBitmap";
+                MarkPresented(next);
             }
-            else if (!PresentGpu(next)) return;
-            PresentedGeneration = next.Generation; PresentedWidth = next.Width; PresentedHeight = next.Height; PresentedFrames++;
+            else PresentGpu(next);
             }
-            finally { if (!ReferenceEquals(next,_displayed)) next.Dispose(); }
+            finally { if (!ReferenceEquals(next,_pendingGpuFrame)) next.Dispose(); }
         }
         catch (NativeEngineException error) when (error.ResultCode == -5)
         { PresentationError = error.Message; Detach(); _rebind = true; _lastRender = now + Stopwatch.Frequency / 4; }
         catch (Exception error)
-        { PresentationError = error.Message; DebugLog.Write("[NativePreview] " + error); Detach(); }
+        { PresentationError = error.Message; DebugLog.Write("[NativePreview] " + error); Detach(); _rebind = false; }
     }
-    private bool PresentGpu(NativePreviewFrame frame)
+    private void MarkPresented(NativePreviewFrame frame)
     {
-        _image ??= NewD3DImage();
-        if (!_image.IsFrontBufferAvailable || !_image.TryLock(new Duration(TimeSpan.Zero))) return false;
-        try
+        PresentationError = null;
+        PresentedGeneration = frame.Generation; PresentedWidth = frame.Width; PresentedHeight = frame.Height; PresentedFrames++;
+    }
+    private void PresentGpu(NativePreviewFrame frame)
+    {
+        if (_surface is null || _surface.Generation != frame.Generation)
         {
-            // Release the previous lease only after WPF has unbound that surface under its lock.
-            _image.SetBackBuffer(D3DResourceType.IDirect3DSurface9,IntPtr.Zero);
-            _displayed?.Dispose(); _displayed = null;
-            _image.SetBackBuffer(D3DResourceType.IDirect3DSurface9,frame.Pointer);
-            // Acquire returns a disposable lease. Retain it here instead of returning its pool slot after RenderFrame.
-            _displayed = frame;
-            _image.AddDirtyRect(new Int32Rect(0,0,frame.Width,frame.Height)); Source = _image;
-            PresentationKind = "D3D11 to D3D9Ex D3DImage";
-            GpuSurfaceBindings++;
-            return true;
+            ClearPresentation();
+            _surface = new D3DPreviewSurface(frame);
         }
-        finally { _image.Unlock(); }
+        _image ??= NewD3DImage();
+        if (!TryLockImage(_image)) return;
+        _gpuWriteLocked = true;
+        if (!ReferenceEquals(Source, _image))
+        {
+            // Bind once per generation. Replacing WPF's interop bitmap for every pool slot
+            // races its asynchronous resource updates and can display an empty frame.
+            _image.SetBackBuffer(D3DResourceType.IDirect3DSurface9, _surface.Pointer, enableSoftwareFallback: true);
+            GpuSurfaceBindings++;
+        }
+        _surface.CopyFrom(frame);
+        _pendingGpuFrame = frame;
+        // A locked D3DImage can postpone CompositionTarget.Rendering. Complete the
+        // asynchronous copy independently so the compositor is never left waiting.
+        if (!CompleteGpuCopy()) _copyPoll.Start();
+    }
+    private static bool TryLockImage(D3DImage image)
+    {
+        if (image.TryLock(new Duration(TimeSpan.Zero))) return true;
+        // D3DImage increments its lock count even when TryLock returns false.
+        // Balance that attempt without touching the surface while WPF is busy.
+        image.Unlock();
+        return false;
+    }
+    private void PollGpuCopy(object? sender, EventArgs args)
+    {
+        try { if (_pendingGpuFrame is not null) CompleteGpuCopy(); else _copyPoll.Stop(); }
+        catch (Exception error)
+        { PresentationError = error.Message; DebugLog.Write("[NativePreview] " + error); Detach(); _rebind = false; }
+    }
+    private bool CompleteGpuCopy()
+    {
+        if (!_surface!.IsCopyComplete()) return false;
+        _copyPoll.Stop();
+        var frame = _pendingGpuFrame!;
+        _image!.AddDirtyRect(new Int32Rect(0, 0, frame.Width, frame.Height));
+        _image.Unlock(); _gpuWriteLocked = false;
+        Source = _image;
+        PresentationKind = "D3D11 to stable D3D9Ex D3DImage";
+        MarkPresented(frame);
+        _pendingGpuFrame = null;
+        frame.Dispose();
+        return true;
     }
     private D3DImage NewD3DImage() { var image = new D3DImage(); image.IsFrontBufferAvailableChanged += FrontBufferChanged; return image; }
     private void ClearPresentation()
     {
+        _copyPoll.Stop();
         if (_image is not null)
         {
-            _image.Lock();
+            if (!_gpuWriteLocked) _image.Lock();
             try { _image.SetBackBuffer(D3DResourceType.IDirect3DSurface9,IntPtr.Zero); }
-            finally { _image.Unlock(); }
+            finally { _image.Unlock(); _gpuWriteLocked = false; }
             _image.IsFrontBufferAvailableChanged -= FrontBufferChanged; _image = null;
         }
-        _displayed?.Dispose(); _displayed = null; Source = null;
+        if (_pendingGpuFrame is { } pending && _surface is { } surface)
+            _ = RetireGpuCopyAsync(surface, pending);
+        else _surface?.Dispose();
+        _surface = null; _pendingGpuFrame = null; Source = null;
+    }
+    private static async Task RetireGpuCopyAsync(D3DPreviewSurface surface, NativePreviewFrame frame)
+    {
+        try { while (!surface.IsCopyComplete()) await Task.Delay(1).ConfigureAwait(false); }
+        catch (Exception error) { DebugLog.Write("[NativePreview] Retiring GPU copy: " + error); }
+        finally { surface.Dispose(); frame.Dispose(); }
     }
     private void Detach()
     {

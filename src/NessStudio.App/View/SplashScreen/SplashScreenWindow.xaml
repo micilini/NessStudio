@@ -174,10 +174,31 @@
                                      IsIndeterminate="True"
                                      Height="6"
                                      Margin="0,12,0,0"
-                                     Foreground="#E74C3C"
-                                     BorderBrush="Transparent"
-                                     Background="#FF5384B5"
-                                     Style="{StaticResource MaterialDesignLinearProgressBar}" />
+                                     Foreground="#5384B5"
+                                     Background="#26384A"
+                                     AutomationProperties.Name="Loading workspace">
+                            <ProgressBar.Template>
+                                <ControlTemplate TargetType="ProgressBar">
+                                    <Border Background="{TemplateBinding Background}" CornerRadius="3"
+                                            SnapsToDevicePixels="True" UseLayoutRounding="True">
+                                        <Border x:Name="SolidIndicator" Background="{TemplateBinding Foreground}" CornerRadius="3" />
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsIndeterminate" Value="True">
+                                            <Trigger.EnterActions>
+                                                <BeginStoryboard>
+                                                    <Storyboard>
+                                                        <DoubleAnimation Storyboard.TargetName="SolidIndicator" Storyboard.TargetProperty="Opacity"
+                                                                         From="0.65" To="1" Duration="0:0:0.9"
+                                                                         AutoReverse="True" RepeatBehavior="Forever" />
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </Trigger.EnterActions>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </ProgressBar.Template>
+                        </ProgressBar>
                     </Grid>
                 </Border>
             </Grid>

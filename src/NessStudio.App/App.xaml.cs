@@ -82,8 +82,7 @@ namespace NessStudio
                 Environment.Exit(0);
             }
             Directory.CreateDirectory(Options.DataDirectory);
-            Directory.CreateDirectory(Options.DocumentsDirectory);
-            Directory.CreateDirectory(Path.Combine(Options.DocumentsDirectory, "Recordings"));
+            Directory.CreateDirectory(Options.RecordingsDirectory);
             base.OnStartup(e);
         }
         protected override void OnExit(ExitEventArgs e)

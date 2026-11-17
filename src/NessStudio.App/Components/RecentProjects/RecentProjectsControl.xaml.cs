@@ -33,10 +33,18 @@ namespace NessStudio.Components.RecentProjects
 
         public async Task RefreshRecoveryAsync()
         {
-            string root=Path.Combine(((App)Application.Current).Options.DocumentsDirectory,"Recordings");
+            var options = ((App)Application.Current).Options;
+            string root = options.RecordingsDirectory;
             IReadOnlyList<RecoveryCandidate> candidates;
             using var deadline=new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(5));
-            try{candidates=await RecoveryCatalog.ScanAsync(root,deadline.Token).WaitAsync(TimeSpan.FromSeconds(5));}
+            try
+            {
+                var found = new List<RecoveryCandidate>();
+                foreach (string directory in new[] { root, Path.Combine(options.DocumentsDirectory, "Recordings") }.Distinct(StringComparer.OrdinalIgnoreCase))
+                    if (Directory.Exists(directory))
+                        found.AddRange(await RecoveryCatalog.ScanAsync(directory, deadline.Token).WaitAsync(TimeSpan.FromSeconds(5)));
+                candidates = found;
+            }
             catch(Exception error)when(error is TimeoutException or OperationCanceledException)
             {candidates=[new(root,root,"ScanPending","Recovery discovery is still waiting for storage. Files and pending resources were preserved; reopen the library to retry.",false)];}
             RecoveryItemsPanel.Children.Clear();
