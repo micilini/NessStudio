@@ -1,0 +1,36 @@
+<Project>
+  <PropertyGroup>
+    <NessMediaPackageDirectory Condition="'$(NessMediaPackageDirectory)' == ''">$(MSBuildThisFileDirectory)../src/NessStudio.App</NessMediaPackageDirectory>
+  </PropertyGroup>
+  <Target Name="PrepareMediaTools" BeforeTargets="AssignTargetPaths" Condition="'$(DesignTimeBuild)' != 'true'">
+    <PropertyGroup>
+      <NessProductFfmpeg>$(MSBuildProjectDirectory)/Native/FFmpeg/ffmpeg.exe</NessProductFfmpeg>
+      <NessProductFfmpeg Condition="!Exists('$(NessProductFfmpeg)')">$(NessMediaPackageDirectory)/Native/FFmpeg/ffmpeg.exe</NessProductFfmpeg>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(NessProductFfmpeg)')" Text="The pinned FFmpeg tool is missing. Run cmake/Restore-MediaTools.ps1 or set NessMediaPackageDirectory to a package matching cmake/ffmpeg.lock.json." />
+    <ReadLinesFromFile File="$(MSBuildThisFileDirectory)ffmpeg.sha256">
+      <Output TaskParameter="Lines" ItemName="NessExpectedFfmpegHash" />
+    </ReadLinesFromFile>
+    <GetFileHash Files="$(NessProductFfmpeg)" Algorithm="SHA256">
+      <Output TaskParameter="Items" ItemName="NessProductFfmpegHash" />
+    </GetFileHash>
+    <Error Condition="'%(NessProductFfmpegHash.FileHash)' != '@(NessExpectedFfmpegHash)'" Text="The FFmpeg SHA-256 differs from the pinned product tool." />
+    <PropertyGroup>
+      <NessProductFfmpegDirectory>$([System.IO.Path]::GetDirectoryName('$(NessProductFfmpeg)'))</NessProductFfmpegDirectory>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(NessProductFfmpegDirectory)/FFmpeg.LICENSE.txt') or !Exists('$(NessProductFfmpegDirectory)/FFmpeg.README.txt')" Text="The pinned FFmpeg license/provider notices are missing. Run cmake/Restore-MediaTools.ps1." />
+    <ItemGroup>
+      <Content Include="$(NessProductFfmpeg)" Link="Native/FFmpeg/ffmpeg.exe" CopyToOutputDirectory="IfDifferent" CopyToPublishDirectory="IfDifferent" />
+      <Content Include="$(MSBuildThisFileDirectory)ffmpeg.sha256" Link="Native/FFmpeg/ffmpeg.sha256" CopyToOutputDirectory="IfDifferent" CopyToPublishDirectory="IfDifferent" />
+      <Content Include="$(MSBuildThisFileDirectory)ffmpeg.lock.json" Link="Native/FFmpeg/ffmpeg.lock.json" CopyToOutputDirectory="IfDifferent" CopyToPublishDirectory="IfDifferent" />
+      <Content Include="$(NessProductFfmpegDirectory)/FFmpeg.LICENSE.txt" Link="Native/FFmpeg/FFmpeg.LICENSE.txt" CopyToOutputDirectory="IfDifferent" CopyToPublishDirectory="IfDifferent" />
+      <Content Include="$(NessProductFfmpegDirectory)/FFmpeg.README.txt" Link="Native/FFmpeg/FFmpeg.README.txt" CopyToOutputDirectory="IfDifferent" CopyToPublishDirectory="IfDifferent" />
+    </ItemGroup>
+  </Target>
+  <Target Name="VerifyCopiedMediaTool" AfterTargets="CopyFilesToOutputDirectory" Condition="'$(DesignTimeBuild)' != 'true'">
+    <GetFileHash Files="$(TargetDir)Native/FFmpeg/ffmpeg.exe" Algorithm="SHA256">
+      <Output TaskParameter="Items" ItemName="NessCopiedFfmpegHash" />
+    </GetFileHash>
+    <Error Condition="'%(NessCopiedFfmpegHash.FileHash)' != '@(NessExpectedFfmpegHash)'" Text="The copied FFmpeg executable differs from the pinned source tool." />
+  </Target>
+</Project>

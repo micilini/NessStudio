@@ -3,6 +3,9 @@
 # Ignore build folders
 NessStudio/bin/
 NessStudio/obj/
+src/**/bin/
+src/**/obj/
+src/**/Native/FFmpeg/ffmpeg.exe
 # Ignore ffmpeg executables
 NessStudio/Modules/ffmpeg.exe
 NessStudio/Modules/ffplay.exe
@@ -10,3 +13,20 @@ NessStudio/Modules/ffprobe.exe
 # Native FFmpeg binary - keep local only
 NessStudio/Native/FFmpeg/ffmpeg.exe
 Native/FFmpeg/ffmpeg.exe
+
+# Isolated toolchain validation outputs (evidence lives outside this repository).
+artifacts/
+.out/
+tests/**/bin/
+tests/**/obj/
+tools/validation/probes/**/bin/
+tools/validation/probes/**/obj/
+tools/**/bin/
+tools/**/obj/
+*.user
+# Partial, owned FFmpeg restoration attempts are not product source.
+src/**/Native/FFmpeg/.restore-*/
+
+# Generated Python validator bytecode
+__pycache__/
+*.py[cod]

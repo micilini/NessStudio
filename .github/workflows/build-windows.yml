@@ -1,0 +1,54 @@
+name: Build NessStudio and native SDK
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nessstudio-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
+      - name: Build and test native SDK
+        run: ./cmake/Build-Native.ps1 -Configuration Release -StageDirectory .out/sdk -RunTests -SkipHardwareTests -Sdk
+      - name: Restore pinned export tool
+        run: ./cmake/Restore-MediaTools.ps1
+      - name: Build Windows application and managed probes
+        run: dotnet build NessStudio.sln -c Release -p:Platform=x64
+      - name: Test managed native ABI
+        run: dotnet run --project tests/NessStudio.AbiProbe -c Release --no-build
+      - name: Publish Windows application
+        run: dotnet publish src/NessStudio.App -c Release -r win-x64 --self-contained false -o .out/app
+      - name: Test native runtime from the published application
+        run: dotnet run --project tests/NessStudio.AbiProbe -c Release --no-build -- --root .out/app
+      - name: Verify dependency notices and database runtime
+        run: ./cmake/Test-ThirdPartyNotices.ps1 -PublishedDirectory .out/app
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: libnessstudio-windows-x64
+          path: .out/sdk
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: nessstudio-v3-windows-x64
+          path: .out/app
+          if-no-files-found: error
+          retention-days: 14

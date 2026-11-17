@@ -1,0 +1,10 @@
+Roboto and Roboto Condensed fonts embedded in MaterialDesignThemes 5.2.1
+
+Copyright 2011 Google Inc. All Rights Reserved.
+Licensed under the Apache License, Version 2.0.
+http://www.apache.org/licenses/LICENSE-2.0
+
+The statements above are transcribed from the font name tables distributed
+inside the pinned MaterialDesignThemes NuGet package. Their exact font hashes
+and versions are recorded in manifest.json. The complete license text is in
+Apache-2.0.txt. The fonts have not been modified by NessStudio.

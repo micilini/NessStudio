@@ -1,0 +1,3 @@
+[submodule "native/deps/NessMuxer"]
+	path = native/deps/NessMuxer
+	url = https://github.com/micilini/NessMuxer.git

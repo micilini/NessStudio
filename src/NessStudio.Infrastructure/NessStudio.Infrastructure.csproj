@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="NessStudio.RecordingProbe" />
+    <ProjectReference Include="../NessStudio.Core/NessStudio.Core.csproj" />
+    <ProjectReference Include="../NessStudio.Interop/NessStudio.Interop.csproj" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="sqlite-net-pcl" Version="1.9.172" />
+    <PackageReference Include="sqlite-net-sqlcipher" Version="1.9.172" />
+    <!-- Patch the bundled plain SQLite binary without changing SQLCipher, its provider or key semantics. -->
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.14" />
+  </ItemGroup>
+</Project>
