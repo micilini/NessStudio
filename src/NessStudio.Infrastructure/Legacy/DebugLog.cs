@@ -19,6 +19,8 @@ public static class DebugLog
     public static string GetPath() => _fileLog?.Path
         ?? throw new InvalidOperationException("Logging must be configured by the application composition root.");
     public static void Write(string message) => Logger.Write(message);
+    /// <summary>Persists failures even when verbose diagnostics are disabled.</summary>
+    public static void WriteError(string message) => _fileLog?.WriteError(message);
     public static void Flush() => _fileLog?.Flush();
     public static void Dispose() => _fileLog?.Dispose();
 
@@ -32,6 +34,10 @@ public static class DebugLog
         public void Write(string message)
         {
             if (!isEnabled()) return;
+            WriteError(message);
+        }
+        internal void WriteError(string message)
+        {
             lock (_sync)
             {
                 if (_disposed) return;

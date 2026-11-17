@@ -23,13 +23,14 @@ int main(int argc, char** argv) {
                     check(actual == static_cast<int64_t>(expected) && actual > previous, "Rational frame clock drifted"); previous = actual; ++checks;
                 }
             }
-            for (const auto rate : {44100u,48000u}) {
+            for (const auto rate : {8000u,16000u,44100u,48000u,96000u,192000u}) {
                 for (uint64_t i = 0; i < 2000000; ++i) { const auto expected = (i / rate) * 10000000ULL + (i % rate) * 10000000ULL / rate; check(sample_time(i, rate) == static_cast<int64_t>(expected), "Sample clock drifted"); ++checks; }
                 check(sample_time(static_cast<uint64_t>(rate) * 8 * 3600, rate) == 8LL * 3600 * hns_per_second, "Eight-hour sample endpoint drifted");
             }
             check(scale_floor(UINT64_MAX, UINT64_MAX, UINT64_MAX) == UINT64_MAX, "Wide intermediate overflowed");
             rejects([] { (void)scale_floor(UINT64_MAX, 2, 1); }); rejects([] { (void)scale_floor(1, 1, 0); });
             rejects([] { (void)frame_time(1, 0, 1); }); rejects([] { (void)frame_time(3000000, 30, 1); });
+            rejects([] { (void)sample_time(1, 7999); }); rejects([] { (void)sample_time(1, 192001); });
             TimestampAdapter qpc{TimeOrigin::QpcTicks, 3000000, {}, false, 0};
             TimestampAdapter wasapi{TimeOrigin::WasapiQpcHns, 3000000, {}, false, 0};
             check(qpc.convert(3000000) == 10000000 && wasapi.convert(3000000) == 3000000, "WASAPI QPC was reconverted as raw ticks");
@@ -56,7 +57,7 @@ int main(int argc, char** argv) {
             check(!clock.map(11000000) && !clock.map(11500000) && !clock.map(13000000), "Paused timestamp was admitted");
             check(clock.active_time(15000000) == 2000000 && clock.wall_time(15000000) == 4000000, "Stop in pause added duration");
             check(!clock.eligible(10999999, 11000001) && clock.eligible(10999990, 11000000), "Acquisition crossing cut was admitted");
-            for (const auto rate : {44100u, 48000u}) {
+            for (const auto rate : {8000u, 16000u, 44100u, 48000u, 96000u, 192000u}) {
                 const int64_t begin = 10950003; const uint64_t count = rate / 5;
                 const auto slices = clock.trim_audio(begin, count, rate); std::set<uint64_t> kept;
                 for (const auto& slice : slices) for (uint64_t i = 0; i < slice.count; ++i) check(kept.insert(slice.first + i).second, "An audio sample was duplicated");

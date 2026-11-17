@@ -34,7 +34,7 @@ int64_t frame_time(uint64_t index, uint32_t numerator, uint32_t denominator) {
     return value;
 }
 int64_t sample_time(uint64_t index, uint32_t rate) {
-    if (rate != 44100 && rate != 48000) throw std::invalid_argument("Unsupported sample rate");
+    if (rate < 8000 || rate > 192000) throw std::invalid_argument("Unsupported sample rate");
     const auto value = signed_time(scale_floor(index, hns_per_second, rate));
     if (value > maximum_session_hns) throw std::out_of_range("Session exceeds 24 hours");
     return value;

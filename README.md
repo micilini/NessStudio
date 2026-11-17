@@ -362,6 +362,8 @@ NessStudio is a Windows recording application for screens, webcams, microphones 
 
 Screens and camera sources produce Matroska tracks; microphone and loopback audio are stored as WAV. Scene recordings can also produce `program.mkv`. Project/session manifests describe the files, timestamps and selected routes. Export formats include MP4, MKV, MP3 and WAV.
 
+The Windows recorder keeps the compact four-card layout, with independent screen and webcam previews. New recording workspaces are stored in `%LOCALAPPDATA%\NessStudio\Recordings` and diagnostics in `%LOCALAPPDATA%\NessStudio\Logs\recording-debug.log`. Existing projects retain their original locations, and recovery also checks the former `Documents\NessStudio\Recordings` folder. Exported files can be saved to the destination selected by the user.
+
 The application and capture engine currently target **Windows x64**. Neither Linux nor macOS capture backends are implemented in libnessstudio. NessMuxer is a separate project with its own platform support. A successful build does not certify every camera, driver, GPU or recording duration.
 
 ### Requirements
@@ -432,6 +434,8 @@ Local checks:
 dotnet run --project tests/NessStudio.AbiProbe -c Release
 powershell -NoProfile -ExecutionPolicy Bypass -File cmake/Test-ThirdPartyNotices.ps1 -PublishedDirectory .out/app
 ```
+
+On a Windows desktop with a camera, microphone, system audio endpoint and supported hardware encoder, `dotnet run --project tests/NessStudio.UiProbe -c Release -- C:/ness-ui-check` exercises the splash, independent previews, source failure/recovery and window restoration. It records all 15 nonempty source combinations in each of the four modes, then decodes every retained track and checks its duration and video frame count. Use a new output directory: the probe opens test windows and writes short recordings to an isolated profile. Append `Automatic` or `FullSoftware` to observe both previews for eight minutes, with frame-progress checks. These interactive checks are separate from CI.
 
 The app's splash and About windows obtain `3.0.0` from the assembly version metadata. Native ABI versions and project/database schema versions are separate contracts and do not track the product's major version.
 

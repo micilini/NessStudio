@@ -12,12 +12,12 @@
         WindowStartupLocation="CenterScreen"
         Background="#171A1D"
         Title="Ness Studio Recorder"
-        Height="510"
-        Width="820"
-        MinHeight="510"
-        MaxHeight="510"
-        MinWidth="820"
-        MaxWidth="820">
+        Height="270"
+        Width="740"
+        MinHeight="270"
+        MaxHeight="270"
+        MinWidth="740"
+        MaxWidth="740">
 
     <Window.Resources>
         <SolidColorBrush x:Key="RecorderBackgroundBrush" Color="#171A1D" />
@@ -360,7 +360,6 @@
     <Grid Background="{StaticResource RecorderBackgroundBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="190" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -423,24 +422,6 @@
             </Menu>
         </Border>
 
-        <Border Grid.Row="2" Background="#202428" CornerRadius="8" Padding="10" Margin="0,8,0,0">
-            <Grid>
-                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="290"/></Grid.ColumnDefinitions>
-                <StackPanel Margin="0,0,12,0">
-                    <TextBlock Text="Program" Foreground="White" FontWeight="SemiBold"/>
-                    <ComboBox x:Name="OutputModeSelector" Margin="0,4,0,0" ItemsSource="{Binding OutputModeOptions}" SelectedItem="{Binding SelectedOutputMode}" IsEnabled="{Binding IsEditEnabled}"/>
-                    <TextBlock Text="{Binding OutputModeSummary}" Foreground="#C0C7CD" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,4"/>
-                    <ComboBox x:Name="SceneLayoutSelector" ItemsSource="{Binding SceneLayoutOptions}" SelectedItem="{Binding SelectedSceneLayout}"/>
-                    <ComboBox x:Name="ProgramCanvasSelector" Margin="0,4,0,0" ItemsSource="{Binding ProgramCanvasOptions}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding SelectedProgramCanvas}" IsEnabled="{Binding IsEditEnabled}" ToolTip="Choose Default source size, HD 720p for all videos, or SD 360p for all videos. The selected preset is recorded in the manifest."/>
-                    <CheckBox Content="Mirror camera in saved program" IsChecked="{Binding MirrorCameraProgram}" Foreground="White" Margin="0,6,0,0"/>
-                    <TextBlock Text="{Binding SceneError}" Foreground="#FFB0A0" FontSize="11" TextWrapping="Wrap"/>
-                </StackPanel>
-                <Border Grid.Column="1" Background="Black" CornerRadius="4" ClipToBounds="True">
-                    <presentation:NativePreviewControl x:Name="ProgramNativePreview" SourceId="3" Workspace="{Binding PreviewWorkspace, ElementName=RootWindow}" Stretch="Uniform"/>
-                </Border>
-            </Grid>
-        </Border>
-
         <Grid Grid.Row="1"
               Margin="10,8,10,10"
               x:Name="GridRecordSettings"
@@ -491,7 +472,6 @@
 
                             <presentation:NativePreviewControl x:Name="ScreenNativePreview" SourceId="1" Workspace="{Binding PreviewWorkspace, ElementName=RootWindow}"
                                    RenderOptions.BitmapScalingMode="LowQuality"
-                                   CacheMode="BitmapCache"
                                    Width="160"
                                    Height="112"
                                    Stretch="Uniform"
@@ -578,7 +558,6 @@
                                    Width="160"
                                    Height="112"
                                    RenderOptions.BitmapScalingMode="LowQuality"
-                                   CacheMode="BitmapCache"
                                    Stretch="Uniform"
                                    SnapsToDevicePixels="True"
                                    UseLayoutRounding="True"
@@ -618,15 +597,15 @@
                                        Margin="6,0,0,0" />
                         </ToggleButton>
 
-                        <StackPanel Grid.Column="2" IsEnabled="{Binding IsWebcamEnabled}" IsHitTestVisible="{Binding IsEditEnabled}">
-                            <ComboBox Style="{StaticResource RecorderComboBoxStyle}"
-                                      ItemsSource="{Binding Webcams}" SelectedItem="{Binding SelectedWebcam, Mode=TwoWay}"
-                                      DisplayMemberPath="Name" MaxDropDownHeight="260" />
-                            <ComboBox Style="{StaticResource RecorderComboBoxStyle}" Margin="0,5,0,0"
-                                      ToolTip="Camera input format (actual source cadence is measured during capture)"
-                                      ItemsSource="{Binding CameraFormats}" SelectedItem="{Binding SelectedCameraFormat, Mode=TwoWay}"
-                                      DisplayMemberPath="Label" MaxDropDownHeight="260" />
-                        </StackPanel>
+                        <ComboBox Grid.Column="2"
+                                  Style="{StaticResource RecorderComboBoxStyle}"
+                                  IsEnabled="{Binding IsWebcamEnabled}"
+                                  IsHitTestVisible="{Binding IsEditEnabled}"
+                                  ItemsSource="{Binding Webcams}"
+                                  SelectedItem="{Binding SelectedWebcam, Mode=TwoWay}"
+                                  DisplayMemberPath="Name"
+                                  VerticalAlignment="Center"
+                                  MaxDropDownHeight="260" />
                     </Grid>
                 </Grid>
             </Border>
