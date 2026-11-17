@@ -1,0 +1,62 @@
+{
+  "status": "BUILT_PENDING_PRODUCT_COMPATIBILITY_REVIEW",
+  "sources": {
+    "schemaVersion": 1,
+    "sqlcipherVersion": "4.20.0",
+    "sqlcipherCommit": "355d4db92d3404e71faa8088d071a71d767807f4",
+    "sqliteVersion": "3.54.1",
+    "opensslVersion": "3.5.9",
+    "archives": [
+      {
+        "file": "openssl-3.5.9.tar.gz",
+        "url": "https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz",
+        "sha256": "603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a",
+        "kind": "source",
+        "extractionDirectory": "."
+      },
+      {
+        "file": "sqlcipher-355d4db.tar.gz",
+        "url": "https://codeload.github.com/sqlcipher/sqlcipher/tar.gz/355d4db92d3404e71faa8088d071a71d767807f4",
+        "sha256": "fc5394c916beeabb1f43e2ac97d0827f36e8917f6675a00cca54537c32cb36a2",
+        "kind": "source",
+        "extractionDirectory": "."
+      },
+      {
+        "file": "strawberry-perl-5.42.3.1-64bit-portable.zip",
+        "url": "https://github.com/StrawberryPerl/Perl-Dist-Strawberry/releases/download/SP_54231_64bit/strawberry-perl-5.42.3.1-64bit-portable.zip",
+        "sha256": "6a081a811781c30aca51dbc036afd93092af91e3297901f02c17043795a10690",
+        "kind": "perl",
+        "extractionDirectory": "perl"
+      },
+      {
+        "file": "nasm-2.16.03-win64.zip",
+        "url": "https://www.nasm.us/pub/nasm/releasebuilds/2.16.03/win64/nasm-2.16.03-win64.zip",
+        "sha256": "3ee4782247bcb874378d02f7eab4e294a84d3d15f3f6ee2de2f47a46aa7226e6",
+        "kind": "nasm",
+        "extractionDirectory": "nasm"
+      }
+    ],
+    "platform": "windows-x64",
+    "opensslConfiguration": [
+      "VC-WIN64A",
+      "no-shared",
+      "no-module",
+      "no-legacy",
+      "no-engine"
+    ]
+  },
+  "files": [
+    {
+      "path": "e_sqlcipher.dll",
+      "sha256": "d279ecb4a4019e15673837fe9b660f67fb11bee8e505cfa0f1eaeed5444a8f63",
+      "bytes": 6087168
+    }
+  ],
+  "amalgamationSha256": "22ea7045a7f81e3eeb27c9be3fc0cf267a50fa3222c75511099ba7b057b6f5b7",
+  "staticCryptoLibrarySha256": "74a8491a2c49e823729fc3573771ab96b7a45c85b578c3a5a983900ae12383f1",
+  "buildRecipeSha256": "2d9b25c8a666c4423a7217d20b391dd984e7ca03d2ffec7e74deba74c5ce52c7",
+  "cmakeRecipeSha256": "3b8b0887e8639628c01b6ae32e9bcdc093ffc167741191206cbb1921ae460008",
+  "compatibilitySourceSha256": "c3b7836aef7146bbd37d4fb6c4c18c9858d9854d10a3561761f1c1b4fb24787f",
+  "runtime": "Windows x64, static CRT/OpenSSL, no external OpenSSL modules required",
+  "releaseApproved": false
+}

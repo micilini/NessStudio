@@ -1,0 +1,8 @@
+# Preserve the exact pinned upstream bytes across Windows checkouts.
+/native/deps/json/* -text -whitespace
+/native/deps/NessMuxer.source.bundle -text
+/native/deps/x264-abi164/** -text
+/native/deps/*.zip -text
+/cmake/sqlcipher/runtime/** -text
+/src/NessStudio.App/Native/FFmpeg/*.txt -text -whitespace
+/licenses/** -text -whitespace

@@ -1,0 +1,6 @@
+<Project>
+  <Import Project="$(MSBuildThisFileDirectory)cmake/Native.targets" Condition="'$(MSBuildProjectName)' == 'NessStudio.Interop'" />
+  <Import Project="$(MSBuildThisFileDirectory)cmake/DatabaseRuntime.targets" Condition="'$(MSBuildProjectName)' == 'NessStudio.Infrastructure' or '$(MSBuildProjectName)' == 'NessStudio.App' or '$(MSBuildProjectName)' == 'NessStudio.ProjectProbe' or '$(MSBuildProjectName)' == 'NessStudio.RecordingProbe'" />
+  <Import Project="$(MSBuildThisFileDirectory)cmake/MediaTools.targets" Condition="'$(MSBuildProjectName)' == 'NessStudio.App'" />
+  <Import Project="$(MSBuildThisFileDirectory)cmake/ThirdPartyNotices.targets" Condition="'$(MSBuildProjectName)' == 'NessStudio.App'" />
+</Project>

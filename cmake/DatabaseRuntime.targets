@@ -1,0 +1,38 @@
+<Project>
+  <PropertyGroup>
+    <NessDatabaseRuntimeDirectory>$(MSBuildThisFileDirectory)sqlcipher/runtime/win-x64</NessDatabaseRuntimeDirectory>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- NuGet exclusions on a library do not flow to its consuming executable.
+         Apply the same exclusion at every in-repo database consumer. -->
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlcipher" Version="2.1.2" ExcludeAssets="native;runtime;build;buildTransitive;contentFiles" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'NessStudio.Infrastructure'">
+    <Content Include="$(NessDatabaseRuntimeDirectory)/e_sqlcipher.dll" Link="e_sqlcipher.dll" CopyToOutputDirectory="IfDifferent" CopyToPublishDirectory="IfDifferent" Visible="false" />
+    <Content Include="$(NessDatabaseRuntimeDirectory)/sqlcipher-runtime.json" Link="sqlcipher-runtime.json" CopyToOutputDirectory="IfDifferent" CopyToPublishDirectory="IfDifferent" Visible="false" />
+    <Content Include="$(NessDatabaseRuntimeDirectory)/e_sqlcipher.sha256" Link="e_sqlcipher.sha256" CopyToOutputDirectory="IfDifferent" CopyToPublishDirectory="IfDifferent" Visible="false" />
+  </ItemGroup>
+  <Target Name="ValidatePinnedDatabaseRuntime" BeforeTargets="PrepareForBuild;GetCopyToOutputDirectoryItems" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Error Condition="'$(OS)' != 'Windows_NT' or ('$(RuntimeIdentifier)' != '' and '$(RuntimeIdentifier)' != 'win-x64') or '$(PlatformTarget)' != 'x64'" Text="The pinned SQLCipher product runtime is qualified for Windows x64 only." />
+    <Error Condition="!Exists('$(NessDatabaseRuntimeDirectory)/e_sqlcipher.dll') or !Exists('$(NessDatabaseRuntimeDirectory)/e_sqlcipher.sha256') or !Exists('$(NessDatabaseRuntimeDirectory)/sqlcipher-runtime.json')" Text="The pinned SQLCipher runtime is missing; see the database runtime section of README.md. An older NuGet native binary must not be substituted." />
+    <ReadLinesFromFile File="$(NessDatabaseRuntimeDirectory)/e_sqlcipher.sha256">
+      <Output TaskParameter="Lines" ItemName="NessExpectedSqlCipherHash" />
+    </ReadLinesFromFile>
+    <GetFileHash Files="$(NessDatabaseRuntimeDirectory)/e_sqlcipher.dll" Algorithm="SHA256">
+      <Output TaskParameter="Items" ItemName="NessSqlCipherSourceHash" />
+    </GetFileHash>
+    <Error Condition="'%(NessSqlCipherSourceHash.FileHash)' != '@(NessExpectedSqlCipherHash)'" Text="The SQLCipher runtime differs from its reviewed SHA-256 pin." />
+  </Target>
+  <Target Name="VerifyCopiedDatabaseRuntime" AfterTargets="CopyFilesToOutputDirectory" DependsOnTargets="ValidatePinnedDatabaseRuntime" Condition="'$(DesignTimeBuild)' != 'true'">
+    <GetFileHash Files="$(TargetDir)e_sqlcipher.dll" Algorithm="SHA256">
+      <Output TaskParameter="Items" ItemName="NessSqlCipherCopiedHash" />
+    </GetFileHash>
+    <Error Condition="'%(NessSqlCipherCopiedHash.FileHash)' != '@(NessExpectedSqlCipherHash)'" Text="The copied SQLCipher runtime differs from the pinned source build." />
+  </Target>
+  <Target Name="VerifyPublishedDatabaseRuntime" AfterTargets="Publish" DependsOnTargets="ValidatePinnedDatabaseRuntime" Condition="'$(DesignTimeBuild)' != 'true'">
+    <GetFileHash Files="$(PublishDir)e_sqlcipher.dll" Algorithm="SHA256">
+      <Output TaskParameter="Items" ItemName="NessSqlCipherPublishedHash" />
+    </GetFileHash>
+    <Error Condition="'%(NessSqlCipherPublishedHash.FileHash)' != '@(NessExpectedSqlCipherHash)'" Text="The published SQLCipher runtime differs from the pinned source build." />
+  </Target>
+</Project>

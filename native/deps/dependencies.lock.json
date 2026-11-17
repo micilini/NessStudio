@@ -1,0 +1,68 @@
+{
+    "schemaVersion":  1,
+    "NessMuxer":  {
+                      "revision":  "2f992006c7e725225034c49d71611383cb316780",
+                      "url":  "https://github.com/micilini/NessMuxer.git",
+                      "bundle":  "NessMuxer.source.bundle",
+                      "sha256":  "c3fe60bd225af22333c65fbcafe668303cec1e3374fc9a3a6be59c4c915f736c",
+                      "license":  "MIT"
+                  },
+    "json":  {
+                 "version":  "3.12.0",
+                 "revision":  "65ee68451d8eb2b5f3a30b410476ab83deb3289b",
+                 "url":  "https://github.com/nlohmann/json",
+                 "sha256":  "aaf127c04cb31c406e5b04a63f1ae89369fccde6d8fa7cdda1ed4f32dfc5de63",
+                 "license":  "MIT"
+             },
+    "libvpl":  {
+                   "version":  "2.17.0",
+                   "revision":  "d77f9195cf495b937631607333288fd917ae8939",
+                   "url":  "https://github.com/intel/libvpl",
+                   "archive":  "libvpl-2.17.0.source.zip",
+                   "sha256":  "bb9d39153a7608d5ce00031e156a2ebf5af57e04b428c0c7694ebf4e5dc73c3c",
+                   "license":  "MIT",
+                   "materialization":  "Exact git archive of pinned official commit; dispatcher built statically, Intel driver runtime loaded only on demand"
+               },
+    "x264":  {
+                 "version":  "0.164.3106 eaa68fa",
+                 "abi":  164,
+                 "sourceUrl":  "https://code.videolan.org/videolan/x264/-/archive/eaa68fa/x264-eaa68fa.tar.gz",
+                 "sourceArchive":  "x264-abi164/x264-eaa68fa.source.tar.gz",
+                 "sourceSha256":  "7df05df44129b2a0edc0c86b88546758d132790a09c8941c4a0161eafe2788c0",
+                 "runtime":  "x264-abi164/libx264-164.dll",
+                 "runtimeSha256":  "12dc03bcba9ff83311c6b470bcea5930fe117f9b22e894ba454134dba394fb37",
+                 "license":  "GPL-2.0-or-later",
+                 "licenseFile":  "x264-abi164/licenses/COPYING",
+                 "headers":  {
+                                 "x264.h":  "23706c4338f0f88b30d47d25aa173631ca97c2778f8c4785749d0f28083869d4",
+                                 "x264_config.h":  "c008ad8da876586baaf4a235e03ec8bba5d00ca8870752d6c24651cedb5d5275"
+                             },
+                 "runtimeOptionalAtLoad":  true,
+                 "ownSourceLicenseUnchanged":  true,
+                 "releaseApproved":  false
+             },
+    "nvenc":  {
+                  "version":  "13.1.15.0",
+                  "revision":  "0a6fba9a2820628b8103464f4c8753ee05838baa",
+                  "url":  "https://github.com/FFmpeg/nv-codec-headers",
+                  "downloadArchiveSha256":  "01f93436056a66b889192d28858eb9e49d69bca7a34ca95f37043a78fbc7c10d",
+                  "license":  "MIT",
+                  "runtimeOptionalAtLoad":  true,
+                  "runtimeSource":  "Installed graphics driver; system32-only DLL search",
+                  "hardwareQualification":  "Pending on supported physical hardware",
+                  "releaseApproved":  false,
+                  "headerManifest":  "NessMuxer/native-backends.lock.json"
+              },
+    "amf":  {
+                "version":  "1.4.36",
+                "revision":  "16f7d73e0b45c473e903e46981ed0b91efc4c091",
+                "url":  "https://github.com/GPUOpen-LibrariesAndSDKs/AMF",
+                "downloadArchiveSha256":  "96d33735a1c1c7c89b396fd02bd5d3c86bdcd806cccf67d974350864054e0ea5",
+                "license":  "MIT",
+                "runtimeOptionalAtLoad":  true,
+                "runtimeSource":  "Installed graphics driver; system32-only DLL search",
+                "hardwareQualification":  "Pending on supported physical hardware",
+                "releaseApproved":  false,
+                "headerManifest":  "NessMuxer/native-backends.lock.json"
+            }
+}

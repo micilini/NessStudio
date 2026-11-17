@@ -1,0 +1,550 @@
+{
+  "schemaVersion": 1,
+  "scope": "Managed publish dependencies, pinned SQLCipher/SQLite/OpenSSL native runtime and accompanying Windows notices; native recording engine and FFmpeg notices are packaged separately",
+  "releaseApproved": false,
+  "packages": [
+    {
+      "id": "MaterialDesignColors",
+      "version": "5.2.1",
+      "licenses": [
+        "MaterialDesignInXamlToolkit.txt"
+      ],
+      "copyright": "Copyright 2025 James Willock/Mulholland Software Ltd",
+      "nugetPackageSha512": "m0PT7YkGlC/CVp1u6PfrHuseZe4mt2PMAA7IcEa2qDHeVeyte3LKi/i5M96WrtJ1aaoifEcqm7QD+NsusbJIzQ=="
+    },
+    {
+      "id": "MaterialDesignThemes",
+      "version": "5.2.1",
+      "licenses": [
+        "MaterialDesignInXamlToolkit.txt",
+        "MaterialDesignIcons.txt",
+        "Roboto-NOTICE.txt",
+        "Apache-2.0.txt"
+      ],
+      "copyright": "Copyright 2025 James Willock/Mulholland Software Ltd",
+      "nugetPackageSha512": "wQmiepDSNt2BiBnB1bM4uP8o0IbnAOmLgPqACiEUQAdASq7wp2pfYGDLnPLUsM+11ZJN3DWlUrFvE+U4FxTPAg=="
+    },
+    {
+      "id": "Microsoft.Xaml.Behaviors.Wpf",
+      "version": "1.1.135",
+      "licenses": [
+        "XamlBehaviorsWpf.txt"
+      ],
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "nugetPackageSha512": "vatGLgd8bMAeV+d+kMiE8yTO/od2IV8MompWvsyj6gEgymeyEGshYMpUTiQI71HcFiqw3WK5OVN5qbh+b/H1nA=="
+    },
+    {
+      "id": "NAudio",
+      "version": "2.2.1",
+      "licenses": [
+        "NAudio.txt"
+      ],
+      "copyright": "© Mark Heath 2023",
+      "nugetPackageSha512": "QmHUKqsU4iQJ8gfKECJGyiBHGUk18XBZSYUBSJq+yRfvcvqV96IrEY12bQSAhnJSiCFlMIcoVZTfp/OcomCExg=="
+    },
+    {
+      "id": "NAudio.Asio",
+      "version": "2.2.1",
+      "licenses": [
+        "NAudio.txt"
+      ],
+      "copyright": "© Mark Heath 2023",
+      "nugetPackageSha512": "HWM/SqYTessyvfIyh5WZ21pfVIfJygzei/57d9LcXWs+yob2+hHasGAHdqGAsvfL7boZWfuPD0LxcWAHKGODBA=="
+    },
+    {
+      "id": "NAudio.Core",
+      "version": "2.2.1",
+      "licenses": [
+        "NAudio.txt"
+      ],
+      "copyright": "© Mark Heath 2023",
+      "nugetPackageSha512": "mI1gc6likH9pDzLEsKolvj9X+2rMunEw8s5tdOUN7tSRJAoXI3Fd6Ise6xrWsHvW1EQaWPItb5AyYk6S3ljrew=="
+    },
+    {
+      "id": "NAudio.Midi",
+      "version": "2.2.1",
+      "licenses": [
+        "NAudio.txt"
+      ],
+      "copyright": "© Mark Heath 2023",
+      "nugetPackageSha512": "o5KinntLW8ulx01rYf7DrSlKIaFp3wjxdnWnnmOLgbP+FtVNRxOfBGiquvNNDWFNTIMAU9qo+D7wzHZIY8zROQ=="
+    },
+    {
+      "id": "NAudio.Wasapi",
+      "version": "2.2.1",
+      "licenses": [
+        "NAudio.txt"
+      ],
+      "copyright": "© Mark Heath 2023",
+      "nugetPackageSha512": "AMvEdIEjdxknxt9rrzBkBSvoAYBBHUnMUHWF2B/q15k9h2q4wgPztluSBVoj3XIPrYys5OCNhND/14J7hyNqiQ=="
+    },
+    {
+      "id": "NAudio.WinForms",
+      "version": "2.2.1",
+      "licenses": [
+        "NAudio.txt"
+      ],
+      "copyright": "© Mark Heath 2023",
+      "nugetPackageSha512": "PGc3KGWLX9rbZ4DQIQu9ChV7s7/OJS2ouJP3AdjxUl1oSKM6eII9ZYdGH7PKN7Mh4MaHr36dXMOnIAPUQKrbOw=="
+    },
+    {
+      "id": "NAudio.WinMM",
+      "version": "2.2.1",
+      "licenses": [
+        "NAudio.txt"
+      ],
+      "copyright": "© Mark Heath 2023",
+      "nugetPackageSha512": "3+w4f7aGBfJjrRSgTCXwQJR8RGwSCnKGGs3Zmmikyji5NMp8UxTZTJBQyLvho0vjJd9lVerhz/nj7nnwD8JU8w=="
+    },
+    {
+      "id": "sqlite-net-pcl",
+      "version": "1.9.172",
+      "licenses": [
+        "SQLite-net.txt"
+      ],
+      "copyright": null,
+      "nugetPackageSha512": "+gozpZk3BVxSIIm+W5SETKCynyRSZ8/pg1jMvx/P4sZxwtT62HuwstMTG5GlE6mXgXOaY2T14w7en0WEyYbaSA=="
+    },
+    {
+      "id": "sqlite-net-sqlcipher",
+      "version": "1.9.172",
+      "licenses": [
+        "SQLite-net.txt"
+      ],
+      "copyright": null,
+      "nugetPackageSha512": "bsmU9LoAYNG3x2l6NhOwT1owpHruErlTqC0zt6Y5PU9DDbCl8KCF+B/X2m6TlSUnemjBid5cU+P/Ux1QMnh8BQ=="
+    },
+    {
+      "id": "SQLitePCLRaw.bundle_e_sqlcipher",
+      "version": "2.1.2",
+      "licenses": [
+        "SQLitePCLRaw-LICENSE.txt",
+        "SQLitePCLRaw-NOTICE.txt"
+      ],
+      "copyright": "Copyright 2014-2022 SourceGear, LLC",
+      "nugetPackageSha512": "giIMea7VKx8kHLx4fRYk+PB7ApxZbqIHnXs6g43YVST38IU642kPhbxG4UqFvD8ZHLbGUCrkryXpbPZ8SWoUmg=="
+    },
+    {
+      "id": "SQLitePCLRaw.bundle_green",
+      "version": "2.1.2",
+      "licenses": [
+        "SQLitePCLRaw-LICENSE.txt",
+        "SQLitePCLRaw-NOTICE.txt"
+      ],
+      "copyright": "Copyright 2014-2022 SourceGear, LLC",
+      "nugetPackageSha512": "kMGBa8ASmuqjQPL0/Jl5sneCqSg1OdoPGjp5UdhtRsg76f0gWLjhITLNheqiJIJRYl79APwr4WwifZbrd84zPg=="
+    },
+    {
+      "id": "SQLitePCLRaw.core",
+      "version": "2.1.2",
+      "licenses": [
+        "SQLitePCLRaw-LICENSE.txt",
+        "SQLitePCLRaw-NOTICE.txt"
+      ],
+      "copyright": "Copyright 2014-2022 SourceGear, LLC",
+      "nugetPackageSha512": "DxBtZACGOkw7f9WwhNTq6OmfXj6h2q+p1WUesQxD7qTzdFJ04d6x0O+aVWeJwItcXdui0A/6d1ir19ZJP62THg=="
+    },
+    {
+      "id": "SQLitePCLRaw.lib.e_sqlite3",
+      "version": "2.1.14",
+      "licenses": [
+        "SQLitePCLRaw-LICENSE.txt",
+        "SQLitePCLRaw-NOTICE.txt"
+      ],
+      "copyright": "Copyright 2014-2024 SourceGear, LLC",
+      "nugetPackageSha512": "6oIc2tLdN5JFjHgm6Csa/NbKMfy2U0yww0VN5lO7u5K0dPC8Eo5MwPjZKpF4QHLrhAFpy67CBx1LuXArlQgDJw=="
+    },
+    {
+      "id": "SQLitePCLRaw.provider.e_sqlcipher",
+      "version": "2.1.2",
+      "licenses": [
+        "SQLitePCLRaw-LICENSE.txt",
+        "SQLitePCLRaw-NOTICE.txt"
+      ],
+      "copyright": "Copyright 2014-2022 SourceGear, LLC",
+      "nugetPackageSha512": "f8ILREwXtHtq+JhB8aULfm7Xlh4tHoYnP/FwM1ibjLvuu2SOhHzbb8ch8gbY/EVTlD4sMP5vUP0CpFFooWbYPg=="
+    },
+    {
+      "id": "SQLitePCLRaw.provider.e_sqlite3",
+      "version": "2.1.2",
+      "licenses": [
+        "SQLitePCLRaw-LICENSE.txt",
+        "SQLitePCLRaw-NOTICE.txt"
+      ],
+      "copyright": "Copyright 2014-2022 SourceGear, LLC",
+      "nugetPackageSha512": "AC56hKmQZ8MyBDbs8P0F4BbvtZWF7I0XTYwZ2eZLbywAqhM6lHnejvAYb1mdZJDHpji2u9ojsjmbdlP9fc/UBw=="
+    },
+    {
+      "id": "runtimepack.Microsoft.Windows.SDK.NET.Ref",
+      "version": "10.0.19041.57",
+      "licenses": [
+        "WindowsSDK-license.rtf",
+        "CsWinRT.txt"
+      ],
+      "copyright": "Microsoft Corporation"
+    }
+  ],
+  "files": [
+    {
+      "file": "MaterialDesignInXamlToolkit.txt",
+      "url": "https://raw.githubusercontent.com/MaterialDesignInXAML/MaterialDesignInXamlToolkit/v5.2.1/LICENSE",
+      "sha256": "cb86f21ecf6ac317fb1d9920e8b2bd2e6ef0903f07bd853d126e9fc5bf234585",
+      "bytes": 1113
+    },
+    {
+      "file": "XamlBehaviorsWpf.txt",
+      "url": "https://raw.githubusercontent.com/microsoft/XamlBehaviorsWpf/1a72a7608536fcae884c1ed318b18ce6411974c5/LICENSE",
+      "sha256": "18cc155157d07d5ac0b227e5f58ae9f815ccd817487fd10c6e4f4f0ec4411ce1",
+      "bytes": 1075
+    },
+    {
+      "file": "SQLitePCLRaw-LICENSE.txt",
+      "url": "https://raw.githubusercontent.com/ericsink/SQLitePCL.raw/v2.1.2/LICENSE.TXT",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "bytes": 11358
+    },
+    {
+      "file": "SQLitePCLRaw-NOTICE.txt",
+      "url": "https://raw.githubusercontent.com/ericsink/SQLitePCL.raw/v2.1.2/NOTICE.TXT",
+      "sha256": "485b276b3d2bfaa26df348e1e5c84df3648981e09b88531a6a53006f0705c24b",
+      "bytes": 9756
+    },
+    {
+      "file": "SQLCipher.txt",
+      "url": "https://raw.githubusercontent.com/sqlcipher/sqlcipher/v4.5.2/LICENSE",
+      "sha256": "3eee3c7964a9becc94d747bd36703d31fc86eb994680b06a61bfd4f2661eaac8",
+      "bytes": 1463
+    },
+    {
+      "file": "LibTomCrypt.txt",
+      "url": "https://raw.githubusercontent.com/libtom/libtomcrypt/v1.18.2/LICENSE",
+      "sha256": "8f196cb13afd271f5e267fd29543fc454596382ad580e7592709492843996ac8",
+      "bytes": 719
+    },
+    {
+      "file": "NAudio.txt",
+      "bytes": 1059,
+      "sha256": "303e01786b271eb464b3f43d18a375f2f17d37bc708a37c2fdf45b289fb5bfaa",
+      "source": "NuGet package NAudio/2.2.1"
+    },
+    {
+      "file": "SQLite-net.txt",
+      "bytes": 1082,
+      "sha256": "f4f848e81a747b85a1f5c7b761bf12b85098dd6a6a46acebd54958e2fe2dd62d",
+      "source": "NuGet package sqlite-net-pcl/1.9.172"
+    },
+    {
+      "file": "WindowsSDK-license.rtf",
+      "url": "https://aka.ms/WinSDKLicenseURL",
+      "resolvedUrl": "https://download.microsoft.com/download/0/F/F/0FF2B061-47DD-4F55-89B6-FD1D8C44F14D/sdk_license.rtf",
+      "contentType": "application/octet-stream",
+      "bytes": 246945,
+      "sha256": "dd07eb178e00c6bba4148457fc00ff77cd4887eb521d504186fe59c9ec8bbe62"
+    },
+    {
+      "file": "CsWinRT.txt",
+      "url": "https://raw.githubusercontent.com/microsoft/CsWinRT/8649ee3eeb2445ca2a36d80d878ef60b96a6c65d/LICENSE",
+      "bytes": 1162,
+      "sha256": "9906940f61b1f0b533fa7d99baf55178b2808fbe113ea51dfbfad8572ccd5f2b"
+    },
+    {
+      "file": "MSVC-Runtime-license.docx",
+      "url": "https://visualstudio.microsoft.com/wp-content/uploads/2025/10/Visual-C-V14-License-Redistributable_and_Runtime_ENU.docx",
+      "bytes": 39553,
+      "sha256": "08651651a7602fc7c0e2763de0fde1ff9f868df2780597cd1775ee9d6441c783"
+    },
+    {
+      "file": "MaterialDesignIcons.txt",
+      "url": "https://raw.githubusercontent.com/Templarian/MaterialDesign/master/LICENSE",
+      "bytes": 992,
+      "sha256": "3bae6305bcaa6d10219b999f65c342034c2d40b1c0e8567fa08605e73ccba829"
+    },
+    {
+      "file": "Apache-2.0.txt",
+      "source": "Same unmodified Apache-2.0 license text included in SQLitePCLRaw-LICENSE.txt",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "bytes": 11358
+    },
+    {
+      "file": "Roboto-NOTICE.txt",
+      "source": "Copyright and licensing fields in pinned MaterialDesignThemes 5.2.1 font name tables",
+      "sha256": "acf6ad770635012d1c0466854849d2bdcf4f2d96b6bdf6abf6501ece4197a924",
+      "bytes": 507
+    },
+    {
+      "file": "SQLCipher-4.20.0.txt",
+      "url": "https://raw.githubusercontent.com/sqlcipher/sqlcipher/355d4db92d3404e71faa8088d071a71d767807f4/LICENSE.md",
+      "sha256": "2a2826f6acf46fa650730cf42cbb22a642be33a7ef119c9c4f4bf6daf3bef48e",
+      "bytes": 1463
+    },
+    {
+      "file": "SQLite-3.54.1.txt",
+      "url": "https://raw.githubusercontent.com/sqlcipher/sqlcipher/355d4db92d3404e71faa8088d071a71d767807f4/SQLITE_LICENSE.md",
+      "sha256": "595e823c2ada6c839679e693bee1f4d7f88e2d34ac99a913ae41e3d43fb10c7d",
+      "bytes": 3760
+    },
+    {
+      "file": "OpenSSL-3.5.9.txt",
+      "url": "https://raw.githubusercontent.com/openssl/openssl/openssl-3.5.9/LICENSE.txt",
+      "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a",
+      "bytes": 10175
+    }
+  ],
+  "components": [
+    {
+      "name": "SQLCipher",
+      "version": "4.5.2 community",
+      "sqliteVersion": "3.39.2",
+      "cryptoProvider": "LibTomCrypt 1.18.2",
+      "scope": "Observed in shipped e_sqlcipher.dll; storage migration/security review remains separate"
+    },
+    {
+      "name": "MSVC Runtime",
+      "version": "14.51.36231",
+      "license": "MSVC-Runtime-license.docx",
+      "source": "Installed Visual Studio 2026 Community VC/Redist/MSVC/14.51.36231/x64/Microsoft.VC145.CRT"
+    },
+    {
+      "name": "Roboto / Roboto Condensed",
+      "container": "MaterialDesignThemes/5.2.1",
+      "fontFiles": [
+        {
+          "file": "Roboto-Black.ttf",
+          "sha256": "8ff04c6e5b13ebba574539918813c46d0fec170849a47e68c1d72aae469fa5ff",
+          "nameTable": {
+            "0": "Copyright 2011 Google Inc. All Rights Reserved.",
+            "5": "Version 2.001171; 2014",
+            "13": "Licensed under the Apache License, Version 2.0",
+            "14": "http://www.apache.org/licenses/LICENSE-2.0"
+          }
+        },
+        {
+          "file": "Roboto-BlackItalic.ttf",
+          "sha256": "9be6d400da270f2c104d40539f3f30338e21ee7bcc1012953706551c10415686",
+          "nameTable": {
+            "0": "Copyright 2011 Google Inc. All Rights Reserved.",
+            "5": "Version 2.001171; 2014",
+            "13": "Licensed under the Apache License, Version 2.0",
+            "14": "http://www.apache.org/licenses/LICENSE-2.0"
+          }
+        },
+        {
+          "file": "Roboto-Bold.ttf",
+          "sha256": "ef2ab0e402d5cb9de893e263a2c44e57f57fec3974b0d981bfe84dec3dae83a1",
+          "nameTable": {
+            "0": "Copyright 2011 Google Inc. All Rights Reserved.",
+            "5": "Version 2.001150; 2014",
+            "13": "Licensed under the Apache License, Version 2.0",
+            "14": "http://www.apache.org/licenses/LICENSE-2.0"
+          }
+        },
+        {
+          "file": "Roboto-BoldItalic.ttf",
+          "sha256": "3157773ff81c4eb0883936e27054c05ed342beeef83a430a1d998213822d3da1",
+          "nameTable": {
+            "0": "Copyright 2011 Google Inc. All Rights Reserved.",
+            "5": "Version 2.001150; 2014",
+            "13": "Licensed under the Apache License, Version 2.0",
+            "14": "http://www.apache.org/licenses/LICENSE-2.0"
+          }
+        },
+        {
+          "file": "Roboto-Italic.ttf",
+          "sha256": "044d2e3e3a17da487da46fc38cbd0a729deb9af044e563f66f8cdbc57421277e",
+          "nameTable": {
+            "0": "Copyright 2011 Google Inc. All Rights Reserved.",
+            "5": "Version 2.001101; 2014",
+            "13": "Licensed under the Apache License, Version 2.0",
+            "14": "http://www.apache.org/licenses/LICENSE-2.0"
+          }
+        },
+        {
+          "file": "Roboto-Light.ttf",
+          "sha256": "e7ea653ddec2d2a74d0dcbff099c009cc7469ec323a50c89a2915ce44ca4c0b4",
+          "nameTable": {
+            "0": "Copyright 2011 Google Inc. All Rights Reserved.",
+            "5": "Version 2.001151; 2014",
+            "13": "Licensed under the Apache License, Version 2.0",
+            "14": "http://www.apache.org/licenses/LICENSE-2.0"
+          }
+        },
+        {
+          "file": "Roboto-LightItalic.ttf",
+          "sha256": "57577a8ab5086295d1026b1d53972fa0a2f7d1770a286d38be62bad4c7cdfbcd",
+          "nameTable": {
+            "0": "Copyright 2011 Google Inc. All Rights Reserved.",
+            "5": "Version 2.001151; 2014",
+            "13": "Licensed under the Apache License, Version 2.0",
+            "14": "http://www.apache.org/licenses/LICENSE-2.0"
+          }
+        },
+        {
+          "file": "Roboto-Medium.ttf",
+          "sha256": "8559132c89ad51d8a2ba5b171887a44a7ba93776e205f553573de228e64b45f8",
+          "nameTable": {
+            "0": "Copyright 2011 Google Inc. All Rights Reserved.",
+            "5": "Version 2.001152; 2014",
+            "13": "Licensed under the Apache License, Version 2.0",
+            "14": "http://www.apache.org/licenses/LICENSE-2.0"
+          }
+        },
+        {
+          "file": "Roboto-MediumItalic.ttf",
+          "sha256": "91a1c11660929e8cfb726d7924a51b4042c0e77ec4c5b90b92fe5e45d26de759",
+          "nameTable": {
+            "0": "Copyright 2011 Google Inc. All Rights Reserved.",
+            "5": "Version 2.001152; 2014",
+            "13": "Licensed under the Apache License, Version 2.0",
+            "14": "http://www.apache.org/licenses/LICENSE-2.0"
+          }
+        },
+        {
+          "file": "Roboto-Regular.ttf",
+          "sha256": "f0e5a21bf5c95e4c1bce2be98a3656ebcc6d42a21f41c4e3ebf69dd815702e54",
+          "nameTable": {
+            "0": "Copyright 2011 Google Inc. All Rights Reserved.",
+            "5": "Version 2.001101; 2014",
+            "13": "Licensed under the Apache License, Version 2.0",
+            "14": "http://www.apache.org/licenses/LICENSE-2.0"
+          }
+        },
+        {
+          "file": "Roboto-Thin.ttf",
+          "sha256": "3b7a6691d978e81adfc92913cdfae58973151985b072df2a1b119ea937ba917e",
+          "nameTable": {
+            "0": "Copyright 2011 Google Inc. All Rights Reserved.",
+            "5": "Version 2.001153; 2014",
+            "13": "Licensed under the Apache License, Version 2.0",
+            "14": "http://www.apache.org/licenses/LICENSE-2.0"
+          }
+        },
+        {
+          "file": "Roboto-ThinItalic.ttf",
+          "sha256": "52079e4f67635c5a9bfc65873ceb6d75c773b25ab4ebdcb423f6e70aa036fd99",
+          "nameTable": {
+            "0": "Copyright 2011 Google Inc. All Rights Reserved.",
+            "5": "Version 2.001153; 2014",
+            "13": "Licensed under the Apache License, Version 2.0",
+            "14": "http://www.apache.org/licenses/LICENSE-2.0"
+          }
+        },
+        {
+          "file": "RobotoCondensed-Bold.ttf",
+          "sha256": "0312269650316e083b0c6d006daef09fbb56b6d172e5c65c31e23f1c25dcd28c",
+          "nameTable": {
+            "0": "Copyright 2011 Google Inc. All Rights Reserved.",
+            "5": "Version 2.001240; 2014",
+            "13": "Licensed under the Apache License, Version 2.0",
+            "14": "http://www.apache.org/licenses/LICENSE-2.0"
+          }
+        },
+        {
+          "file": "RobotoCondensed-BoldItalic.ttf",
+          "sha256": "1b2a325a9956c169299a7fc805a0b9a224edec355d1d8bedf2fa3d0d4a190b29",
+          "nameTable": {
+            "0": "Copyright 2011 Google Inc. All Rights Reserved.",
+            "5": "Version 2.001240; 2014",
+            "13": "Licensed under the Apache License, Version 2.0",
+            "14": "http://www.apache.org/licenses/LICENSE-2.0"
+          }
+        },
+        {
+          "file": "RobotoCondensed-Italic.ttf",
+          "sha256": "f546219826f3eb9f3d690ecbe4f1d559e6329b9ccca3e34e9bf440d327827bf5",
+          "nameTable": {
+            "0": "Copyright 2011 Google Inc. All Rights Reserved.",
+            "5": "Version 2.001240; 2014",
+            "13": "Licensed under the Apache License, Version 2.0",
+            "14": "http://www.apache.org/licenses/LICENSE-2.0"
+          }
+        },
+        {
+          "file": "RobotoCondensed-Light.ttf",
+          "sha256": "3c8dc0ab1183367c5628994f0896958a9f42fd58f4d4d2c3b0e63ffa3beaebe1",
+          "nameTable": {
+            "0": "Copyright 2011 Google Inc. All Rights Reserved.",
+            "5": "Version 2.001240; 2014",
+            "13": "Licensed under the Apache License, Version 2.0",
+            "14": "http://www.apache.org/licenses/LICENSE-2.0"
+          }
+        },
+        {
+          "file": "RobotoCondensed-LightItalic.ttf",
+          "sha256": "8ce0c7eec44d511412b883db3edeed2df5002ea7611a89efa6c03fba5baa65bb",
+          "nameTable": {
+            "0": "Copyright 2011 Google Inc. All Rights Reserved.",
+            "5": "Version 2.001240; 2014",
+            "13": "Licensed under the Apache License, Version 2.0",
+            "14": "http://www.apache.org/licenses/LICENSE-2.0"
+          }
+        },
+        {
+          "file": "RobotoCondensed-Regular.ttf",
+          "sha256": "d5cbe10cfb954e6d580525bd05536b21447ce29ab8a84e21da8a58b588190326",
+          "nameTable": {
+            "0": "Copyright 2011 Google Inc. All Rights Reserved.",
+            "5": "Version 2.001201; 2014",
+            "13": "Licensed under the Apache License, Version 2.0",
+            "14": "http://www.apache.org/licenses/LICENSE-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Material Design Icons",
+      "container": "MaterialDesignThemes/5.2.1",
+      "provenance": "PackIconKind.cs remarks in MaterialDesignInXamlToolkit v5.2.1 identify the included upstream notice",
+      "notice": "MaterialDesignIcons.txt"
+    }
+  ],
+  "nativeComponents": [
+    {
+      "id": "SQLCipher Community",
+      "version": "4.20.0",
+      "runtimeVersionField": "sqlcipherVersion",
+      "licenses": [
+        "SQLCipher-4.20.0.txt"
+      ],
+      "source": "https://github.com/sqlcipher/sqlcipher/tree/355d4db92d3404e71faa8088d071a71d767807f4",
+      "artifact": "e_sqlcipher.dll",
+      "artifactSha256": "d279ecb4a4019e15673837fe9b660f67fb11bee8e505cfa0f1eaeed5444a8f63"
+    },
+    {
+      "id": "SQLite",
+      "version": "3.54.1",
+      "runtimeVersionField": "sqliteVersion",
+      "licenses": [
+        "SQLite-3.54.1.txt"
+      ],
+      "source": "https://github.com/sqlcipher/sqlcipher/tree/355d4db92d3404e71faa8088d071a71d767807f4",
+      "artifact": "e_sqlcipher.dll",
+      "artifactSha256": "d279ecb4a4019e15673837fe9b660f67fb11bee8e505cfa0f1eaeed5444a8f63"
+    },
+    {
+      "id": "OpenSSL",
+      "version": "3.5.9",
+      "runtimeVersionField": "opensslVersion",
+      "licenses": [
+        "OpenSSL-3.5.9.txt"
+      ],
+      "source": "https://github.com/openssl/openssl/tree/openssl-3.5.9",
+      "artifact": "e_sqlcipher.dll",
+      "artifactSha256": "d279ecb4a4019e15673837fe9b660f67fb11bee8e505cfa0f1eaeed5444a8f63"
+    }
+  ],
+  "excludedNativePackages": [
+    {
+      "id": "SQLitePCLRaw.lib.e_sqlcipher",
+      "version": "2.1.2",
+      "licenses": [
+        "SQLitePCLRaw-LICENSE.txt",
+        "SQLitePCLRaw-NOTICE.txt",
+        "SQLCipher.txt",
+        "LibTomCrypt.txt"
+      ],
+      "copyright": "Copyright 2014-2022 SourceGear, LLC",
+      "nugetPackageSha512": "htozyb4oYenD0L2L1WdX2QN5GvDYoEYK/qYmCG1M1ByUrOSpeXyEewYJDVNL8Z6p11wza8eqY9xZFAW8UN/dHA==",
+      "reason": "The obsolete native payload is explicitly excluded from every database consumer. The replacement source-built native components are inventoried separately."
+    }
+  ]
+}

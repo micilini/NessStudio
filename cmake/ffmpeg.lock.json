@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "release": "9.0.2",
+  "architecture": "windows-x64",
+  "provider": "Gyan Doshi essentials static build",
+  "archiveUrl": "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-9.0.2-essentials_build.zip",
+  "archiveSha256": "60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba",
+  "upstreamSourceUrl": "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz",
+  "upstreamRevision": "946fcce07b",
+  "license": "GPL-3.0-or-later; preserves this third-party component's license, not a relicensing of NessStudio",
+  "files": [
+    {
+      "entry": "ffmpeg-9.0.2-essentials_build/bin/ffmpeg.exe",
+      "name": "ffmpeg.exe",
+      "sha256": "3256173f3f8bffd7df12227c68adf68025edb1832273a9530688a7bb1ed8edec"
+    },
+    {
+      "entry": "ffmpeg-9.0.2-essentials_build/LICENSE",
+      "name": "FFmpeg.LICENSE.txt",
+      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+    },
+    {
+      "entry": "ffmpeg-9.0.2-essentials_build/README.txt",
+      "name": "FFmpeg.README.txt",
+      "sha256": "0342de6bb39dd421cbec2c00d89ad274b640d75ad3f2cab09ffd647ce2d8f949"
+    }
+  ]
+}

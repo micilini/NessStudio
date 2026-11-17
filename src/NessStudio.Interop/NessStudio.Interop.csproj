@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../NessStudio.Core/NessStudio.Core.csproj" />
+    <Compile Remove="Legacy/NessMuxerInterop.cs;Legacy/NessMuxerWriter.cs;Legacy/GdiBitmapHandle.cs" />
+  </ItemGroup>
+</Project>
