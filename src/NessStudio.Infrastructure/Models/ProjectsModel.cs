@@ -28,10 +28,11 @@ namespace NessStudio.Models
                     timestamp = timestamp[..19];
                     format = "yyyyMMdd_HHmmss_fff";
                 }
+                else if (title.Length == 19) format = "yyyy_MM_dd HH:mm:ss";
                 else if (title.Length != 15) return title;
 
                 return DateTime.TryParseExact(timestamp, format, CultureInfo.InvariantCulture, DateTimeStyles.None, out var recordedAt)
-                    ? recordedAt.ToString("yyyy_MM_dd HH:mm:ss", CultureInfo.InvariantCulture)
+                    ? recordedAt.ToString("MM/dd/yyyy HH:mm:ss", CultureInfo.InvariantCulture)
                     : title;
             }
         }

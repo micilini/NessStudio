@@ -290,7 +290,7 @@ namespace NessStudio.Components.RecentProjects
             var dateText = new TextBlock
             {
                 VerticalAlignment = VerticalAlignment.Center,
-                Text = model.UpdatedAt.ToString("dd/MM/yyyy HH:mm"),
+                Text = model.UpdatedAt.ToString("MM/dd/yyyy HH:mm", System.Globalization.CultureInfo.InvariantCulture),
                 FontSize = 12,
                 FontFamily = new FontFamily("Arial"),
                 FontWeight = FontWeights.Medium,

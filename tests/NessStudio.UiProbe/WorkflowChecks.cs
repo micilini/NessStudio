@@ -69,7 +69,7 @@ internal static partial class Program
         for (int index = 0; index < titles.Length; index++)
         {
             model.Title = titles[index];
-            if (index == 1) Check(model.DisplayTitle == "2026_11_18 13:24:56", "Automatic recording names are not readable dates and times.");
+            if (index == 1) Check(model.DisplayTitle == "11/18/2026 13:24:56", "Automatic recording names are not readable dates and times.");
             await recent.RenderProjectsAsync([model]);
             home.UpdateLayout();
             await Task.Delay(250);
