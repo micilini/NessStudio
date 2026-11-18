@@ -17,11 +17,13 @@ namespace NessStudio.View.AboutScreen
 {
     public partial class AboutScreenWindow : Window
     {
+        private bool _initializingLogs = true;
         public AboutScreenWindow()
         {
             InitializeComponent();
             AppId.Text = ((App)Application.Current).ApplicationIdentifier;
             EnableDebugLogsCheckBox.IsChecked = ((App)Application.Current).DebugLogsEnabled;
+            _initializingLogs = false;
         }
         public async void CheckForUpdates()
         {
@@ -51,6 +53,8 @@ namespace NessStudio.View.AboutScreen
         }
         private void SetDebugLogsEnabled(bool enabled)
         {
+            if (_initializingLogs) return;
+            bool saved = false;
             try
             {
                 var app = (App)Application.Current;
@@ -74,6 +78,7 @@ namespace NessStudio.View.AboutScreen
                     return;
                 }
                 app.DebugLogsEnabled = enabled;
+                saved = true;
                 if (enabled)
                 {
                     DebugLog.Write("[SETTINGS] Debug logs => enabled");
@@ -85,6 +90,15 @@ namespace NessStudio.View.AboutScreen
                                 "Error",
                                 MessageBoxButton.OK,
                                 MessageBoxImage.Error);
+            }
+            finally
+            {
+                if (!saved)
+                {
+                    _initializingLogs = true;
+                    try { EnableDebugLogsCheckBox.IsChecked = ((App)Application.Current).DebugLogsEnabled; }
+                    finally { _initializingLogs = false; }
+                }
             }
         }
         private void OnCloseIconClicked(object sender, MouseButtonEventArgs e)

@@ -23,7 +23,8 @@ namespace NessStudio
         public string ApplicationVersion => DisplayVersion;
         public string ApplicationIdentifier { get; set; }
         public string AppLanguage { get; set; }
-        public bool DebugLogsEnabled { get; set; } = false;
+        private volatile bool _debugLogsEnabled;
+        public bool DebugLogsEnabled { get => _debugLogsEnabled; set => _debugLogsEnabled = value; }
         public int RecordingTimerSeconds { get; set; } = 3;
         public int RecordingFps { get; set; } = 30;
         /// <summary>Gets or sets the recording execution policy selected in the frontend.</summary>

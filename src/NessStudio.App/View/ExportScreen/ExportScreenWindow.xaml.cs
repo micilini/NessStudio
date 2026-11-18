@@ -332,6 +332,34 @@ namespace NessStudio.View.ExportScreen
 
         private async void StartExportButton_Click(object sender, RoutedEventArgs e)
         {
+            await StartExportAsync();
+        }
+
+        private void OpenOutputFolderButton_Click(object sender, RoutedEventArgs e)
+        {
+            OpenOutputFolder(OutputPathTextBox.Text, _mode);
+        }
+
+        private void OpenOutputFolder(string outputPath, RecordingExportMode mode)
+        {
+            try
+            {
+                string fullPath = Path.GetFullPath(outputPath);
+                string folder = mode == RecordingExportMode.SeparateTracks
+                    ? fullPath : Path.GetDirectoryName(fullPath)!;
+                Directory.CreateDirectory(folder);
+                Process.Start(new ProcessStartInfo { FileName = folder, UseShellExecute = true });
+            }
+            catch (Exception error)
+            {
+                DebugLog.WriteError("[ExportScreen] Open output folder: " + error);
+                MessageBox.Show("Unable to open the output folder.\n\n" + error.Message,
+                    "Export Recording", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private async Task StartExportAsync()
+        {
             if (_sessionInfo == null)
                 return;
 
@@ -354,7 +382,7 @@ namespace NessStudio.View.ExportScreen
             {
                 var progress = new Progress<string>(message =>
                 {
-                    if (!string.IsNullOrWhiteSpace(message))
+                    if (_isExporting && !string.IsNullOrWhiteSpace(message))
                         ExportStatusTextBlock.Text = message;
                 });
 
@@ -364,7 +392,10 @@ namespace NessStudio.View.ExportScreen
 
                 if (result.Success)
                 {
-                    MessageBox.Show(result.Message, "Export Recording", MessageBoxButton.OK, MessageBoxImage.Information);
+                    ExportStatusTextBlock.Text = "100% - " + result.Message;
+                    ExportProgressBar.IsIndeterminate = false;
+                    ExportProgressBar.Value = 100;
+                    OpenOutputFolder(result.OutputPath, request.Mode);
                 }
                 else
                 {
@@ -373,7 +404,7 @@ namespace NessStudio.View.ExportScreen
             }
             catch (Exception ex)
             {
-                DebugLog.Write("[ExportScreen] export ERROR:\n" + ex);
+                DebugLog.WriteError("[ExportScreen] export ERROR:\n" + ex);
                 ExportStatusTextBlock.Text = "Export failed.";
                 MessageBox.Show("Export failed.\n\n" + ex.Message, "Export Recording", MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -564,7 +595,13 @@ namespace NessStudio.View.ExportScreen
         {
             _isExporting = isExporting;
 
-            ExportProgressBar.Visibility = isExporting ? Visibility.Visible : Visibility.Collapsed;
+            ExportProgressBar.Visibility = isExporting || (!ExportProgressBar.IsIndeterminate && ExportProgressBar.Value == 100)
+                ? Visibility.Visible : Visibility.Collapsed;
+            if (isExporting)
+            {
+                ExportProgressBar.IsIndeterminate = true;
+                ExportProgressBar.Value = 0;
+            }
             StartExportButton.IsEnabled = !isExporting;
             StartExportButton.Content = isExporting ? "Exporting..." : "Start Export";
             CancelButton.Content = isExporting ? "Cancel Export" : "Cancel";
@@ -576,6 +613,7 @@ namespace NessStudio.View.ExportScreen
             ContainerComboBox.IsEnabled = !isExporting;
             QualityComboBox.IsEnabled = !isExporting;
             OutputPathTextBox.IsEnabled = !isExporting;
+            BrowseOutputButton.IsEnabled = !isExporting;
         }
 
         private void UpdateContainerOptionsForCurrentLayout(bool forceAudioDefault)

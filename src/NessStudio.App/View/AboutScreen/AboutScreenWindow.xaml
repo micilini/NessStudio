@@ -398,7 +398,7 @@
                                                    FontWeight="Bold"
                                                    Foreground="#CCD5D7" />
 
-                                        <TextBlock Text="Enable diagnostic logs while debugging NessStudio behavior."
+                                        <TextBlock Text="Enable detailed diagnostic logs. Recording errors are saved separately, even when this option is off."
                                                    FontFamily="Arial"
                                                    FontSize="13"
                                                    Foreground="#708089"

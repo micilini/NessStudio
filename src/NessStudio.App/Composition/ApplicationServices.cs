@@ -18,7 +18,8 @@ public sealed class ApplicationServices : IDisposable
     public ApplicationServices(App app)
     {
         _app = app;
-        DebugLog.Configure(Path.Combine(app.Options.DataDirectory, "Logs", "recording-debug.log"), () => app.DebugLogsEnabled);
+        DebugLog.Configure(Path.Combine(app.Options.DataDirectory, "Logs", "recording-debug.log"), () => app.DebugLogsEnabled,
+            Path.Combine(app.Options.DataDirectory, "Logs", "recording-errors.log"));
         DatabaseHelper.Configure(() => app.DBConnection ?? throw new InvalidOperationException("The application database has not been initialized."));
         RecordingPreferences = new RecordingPreferencesService(() => app.RecordingPreferencesFilePath, DebugLog.Logger);
         RecorderFactory = new RecordingEngineFactory(AppContext.BaseDirectory, DebugLog.Logger);

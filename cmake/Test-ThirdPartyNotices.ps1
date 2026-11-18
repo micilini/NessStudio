@@ -24,6 +24,17 @@ foreach ($package in $manifest.packages) {
         if (-not $recorded.ContainsKey($file)) { throw ('Unverified license reference: ' + $file) }
     }
 }
+$runtimePackCount = 0
+foreach ($package in $manifest.selfContainedRuntimePacks) {
+    $identity = $package.id + '/' + $package.version
+    if (-not $dependencies.libraries.PSObject.Properties[$identity]) { continue }
+    if ($packages.ContainsKey($identity)) { throw ('Duplicate runtime notice identity: ' + $identity) }
+    foreach ($file in $package.licenses) {
+        if (-not $recorded.ContainsKey($file)) { throw ('Unverified runtime license reference: ' + $file) }
+    }
+    $packages[$identity] = $true
+    $runtimePackCount++
+}
 foreach ($dependency in $dependencies.libraries.PSObject.Properties) {
     if ($dependency.Value.type -eq 'project') { continue }
     if (-not $packages.ContainsKey($dependency.Name)) {
@@ -57,4 +68,4 @@ foreach ($component in $manifest.nativeComponents) {
     $version = $runtime.sources.PSObject.Properties[$component.runtimeVersionField]
     if (-not $version -or $version.Value -ne $component.version) { throw ('Database component version differs from build provenance: ' + $component.id) }
 }
-[pscustomobject]@{status='PASS';noticeFiles=$manifest.files.Count;dependencyVersions=$manifest.packages.Count;nativeComponents=$nativeComponents.Count;releaseApproved=$false}
+[pscustomobject]@{status='PASS';noticeFiles=$manifest.files.Count;dependencyVersions=$manifest.packages.Count;selfContainedRuntimePacks=$runtimePackCount;nativeComponents=$nativeComponents.Count;releaseApproved=$false}

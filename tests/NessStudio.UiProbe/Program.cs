@@ -20,19 +20,22 @@ using NessStudio.View.SplashScreen;
 using NessStudio.ViewModel;
 using NessStudio.ViewModel.Helpers;
 
-internal static class Program
+internal static partial class Program
 {
     private static readonly List<object> Results = [];
     private static string _output = "";
     private static RecordingExecutionMode? _observeMode;
+    private static string? _workflowProject;
     private static void Check(bool value, string message) { if (!value) throw new InvalidDataException(message); }
 
     [STAThread]
     private static int Main(string[] args)
     {
-        if (args.Length is < 1 or > 2) return 2;
+        if (args.Length is < 1 or > 3) return 2;
         string output = args[0];
-        if (args.Length == 2) _observeMode = Enum.Parse<RecordingExecutionMode>(args[1]);
+        if (args.Length == 3 && args[1] == "workflow") _workflowProject = Path.GetFullPath(args[2]);
+        else if (args.Length == 2) _observeMode = Enum.Parse<RecordingExecutionMode>(args[1]);
+        else if (args.Length == 3) return 2;
         _output = Path.GetFullPath(output);
         if (Directory.Exists(_output)) throw new IOException("Use a new evidence directory.");
         Directory.CreateDirectory(_output);
@@ -49,15 +52,22 @@ internal static class Program
             {
                 await Task.Run(app.Services.LoadConfiguration);
                 app.DebugLogsEnabled = false;
+                DebugLog.Write("UI probe: this debug message must stay disabled.");
+                Check(!File.Exists(DebugLog.GetPath()), "Disabled debug logging created a diagnostic file.");
                 DebugLog.WriteError("UI probe: failure logging remains available without verbose diagnostics.");
-                using (var stream = new FileStream(DebugLog.GetPath(), FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                using (var stream = new FileStream(DebugLog.GetErrorPath(), FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                 using (var reader = new StreamReader(stream))
                     Check(reader.ReadToEnd().Contains("failure logging remains available"), "Failure log was not persisted.");
+                Check(!File.Exists(DebugLog.GetPath()), "Failure logging wrote to the disabled diagnostic file.");
                 app.DebugLogsEnabled = true;
                 Results.Add(new { name = "failure-log-without-verbose-diagnostics" });
-                GpuLockRetry();
-                await SplashAsync();
-                await RecorderAsync(app);
+                if (_workflowProject is not null) await WorkflowAsync(app, _workflowProject);
+                else
+                {
+                    GpuLockRetry();
+                    await SplashAsync();
+                    await RecorderAsync(app);
+                }
                 await UntilAsync(() => NativeEngine.WaitForQuiescence(0), "Native preview/recording resources did not quiesce.", seconds: 5);
                 File.WriteAllText(Path.Combine(_output, "result.json"), JsonSerializer.Serialize(new { status = "PASS", cases = Results }, new JsonSerializerOptions { WriteIndented = true }));
                 app.Shutdown(0);

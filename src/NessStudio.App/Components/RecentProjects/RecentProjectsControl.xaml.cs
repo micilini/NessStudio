@@ -291,7 +291,8 @@ namespace NessStudio.Components.RecentProjects
 
             var dateBox = new TextBox
             {
-                Margin = new Thickness(0, 8, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
                 Text = model.UpdatedAt.ToString("dd/MM/yyyy HH:mm"),
                 FontSize = 12,
                 FontFamily = new FontFamily("Arial"),
@@ -327,8 +328,10 @@ namespace NessStudio.Components.RecentProjects
 
             var optionsBtn = new Button
             {
-                Width = 28,
-                Height = 28,
+                Style = (Style)FindResource("RecordingOptionsButtonStyle"),
+                Width = 32,
+                Height = 32,
+                VerticalAlignment = VerticalAlignment.Center,
                 Padding = new Thickness(0),
                 Margin = new Thickness(8, 0, 0, 0),
                 Background = Brushes.Transparent,
@@ -337,18 +340,16 @@ namespace NessStudio.Components.RecentProjects
                 Cursor = Cursors.Hand,
                 Tag = model,
                 ToolTip = "More options",
-                Content = new TextBlock
+                Content = new PackIcon
                 {
-                    Text = "⋮",
-                    Foreground = fg,
-                    FontSize = 24,
-                    FontFamily = new FontFamily("Arial"),
-                    FontWeight = FontWeights.Bold,
+                    Kind = PackIconKind.DotsVertical,
+                    Width = 20,
+                    Height = 20,
                     HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Margin = new Thickness(0, -4, 0, 0)
+                    VerticalAlignment = VerticalAlignment.Center
                 }
             };
+            System.Windows.Automation.AutomationProperties.SetName(optionsBtn, "More options");
 
             optionsBtn.Click += (s, e) => OpenOptionsMenu(optionsBtn, model, card);
 

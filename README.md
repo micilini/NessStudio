@@ -362,7 +362,7 @@ NessStudio is a Windows recording application for screens, webcams, microphones 
 
 Screens and camera sources produce Matroska tracks; microphone and loopback audio are stored as WAV. Scene recordings can also produce `program.mkv`. Project/session manifests describe the files, timestamps and selected routes. Export formats include MP4, MKV, MP3 and WAV.
 
-The Windows recorder keeps the compact four-card layout, with independent screen and webcam previews. New recording workspaces are stored in `%LOCALAPPDATA%\NessStudio\Recordings` and diagnostics in `%LOCALAPPDATA%\NessStudio\Logs\recording-debug.log`. Existing projects retain their original locations, and recovery also checks the former `Documents\NessStudio\Recordings` folder. Exported files can be saved to the destination selected by the user.
+The Windows recorder keeps the compact four-card layout, with independent screen and webcam previews. New recording workspaces are stored in `%LOCALAPPDATA%\NessStudio\Recordings`. Detailed diagnostics are written to `%LOCALAPPDATA%\NessStudio\Logs\recording-debug.log` only while **Enable Debug Logs** is checked in About. Disabling it stops new diagnostic entries without deleting existing logs. Failures are recorded separately in `recording-errors.log`. Existing projects retain their original locations, and recovery also checks the former `Documents\NessStudio\Recordings` folder. Export offers **Open Folder** beside **Browse** and automatically opens the destination after successful validation of the exported files.
 
 The application and capture engine currently target **Windows x64**. Neither Linux nor macOS capture backends are implemented in libnessstudio. NessMuxer is a separate project with its own platform support. A successful build does not certify every camera, driver, GPU or recording duration.
 
@@ -390,6 +390,14 @@ dotnet publish src/NessStudio.App/NessStudio.App.csproj -c Release -r win-x64 --
 ```
 
 Launch `.out/app/NessStudio.exe`. Publish with `--self-contained true` when you want to include the .NET runtime. Keep the complete publish directory together.
+
+For a self-contained Windows x64 executable with ReadyToRun enabled, use the **Standalone** publish profile:
+
+```powershell
+dotnet publish src/NessStudio.App/NessStudio.App.csproj -c Release -p:PublishProfile=Standalone -p:DebugType=embedded
+```
+
+Distribute `.out/standalone/NessStudio.exe`. It includes the .NET Desktop Runtime, native dependencies, FFmpeg and dependency notices. This profile uses .NET 10's content extraction mode to preserve the relative paths required by those components: the first launch extracts its versioned contents under `%TEMP%\.net`, and later launches reuse that cache. Trimming is disabled for WPF compatibility. The directory-based publish command above remains available for deployments that prefer loose runtime files.
 
 MSBuild invokes `cmake/Build-Native.ps1` automatically through `NessStudio.Interop`, then copies the native runtime into the application output. You do not need to build another repository manually for the normal app build. The exact NessMuxer revision is restored from the checked-in source bundle when its submodule is absent; an existing checkout with a different revision fails explicitly.
 
@@ -436,6 +444,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File cmake/Test-ThirdPartyNotices
 ```
 
 On a Windows desktop with a camera, microphone, system audio endpoint and supported hardware encoder, `dotnet run --project tests/NessStudio.UiProbe -c Release -- C:/ness-ui-check` exercises the splash, independent previews, source failure/recovery and window restoration. It records all 15 nonempty source combinations in each of the four modes, then decodes every retained track and checks its duration and video frame count. Use a new output directory: the probe opens test windows and writes short recordings to an isolated profile. Append `Automatic` or `FullSoftware` to observe both previews for eight minutes, with frame-progress checks. These interactive checks are separate from CI.
+
+For the About log preference, recording options menu and export folder controls, append `workflow C:/path/to/existing-recording` instead. Supply a finalized recording containing screen, webcam, microphone and system audio tracks. This check exports into its new evidence directory, decodes each result, and verifies that Explorer opens the correct destination for single-file and separate-track exports. It closes only the Explorer windows opened for those test destinations.
 
 The app's splash and About windows obtain `3.0.0` from the assembly version metadata. Native ABI versions and project/database schema versions are separate contracts and do not track the product's major version.
 

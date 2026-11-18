@@ -1235,7 +1235,7 @@ namespace NessStudio.ViewModel
                 }
 
                 if (!_isClosing) System.Windows.MessageBox.Show(
-                    $"Failed to start recording:\n{ex.Message}\n\n{ex.InnerException?.Message}\n\nLog file:\n{DebugLog.GetPath()}",
+                    $"Failed to start recording:\n{ex.Message}\n\n{ex.InnerException?.Message}\n\nLog file:\n{DebugLog.GetErrorPath()}",
                     "Recording",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error

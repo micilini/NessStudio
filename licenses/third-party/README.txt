@@ -38,7 +38,10 @@ NessMuxer, nlohmann/json, oneVPL, x264, NVENC headers and AMF headers.
 x264 source and its GPL-2.0-or-later notice accompany its runtime.
 FFmpeg's license and provider notice accompany Native/FFmpeg/ffmpeg.exe.
 The framework-dependent App requires the separately installed .NET 10
-Windows Desktop Runtime; that runtime is not bundled in the App directory.
+Windows Desktop Runtime. The self-contained publish includes .NET and WPF;
+their exact runtime pack versions and accompanying licenses/notices are
+recorded in selfContainedRuntimePacks. Single-file publication includes these
+notices inside its extracted Licenses/ThirdParty directory.
 
 These files preserve third-party notices. They do not change the license of
 NessStudio's own source or approve a public release. Distribution review,
