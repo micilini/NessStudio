@@ -1,10 +1,15 @@
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$PublishedDirectory)
+param(
+    [Parameter(Mandatory)][string]$PublishedDirectory,
+    # For single-file packages, pass the matching deps.json used to build the bundle.
+    [string]$DependencyManifestPath
+)
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path -LiteralPath $PublishedDirectory).Path
 $notices = Join-Path $root 'Licenses/ThirdParty'
 $manifest = Get-Content -LiteralPath (Join-Path $notices 'manifest.json') -Raw | ConvertFrom-Json
-$dependencies = Get-Content -LiteralPath (Join-Path $root 'NessStudio.deps.json') -Raw | ConvertFrom-Json
+if (-not $DependencyManifestPath) { $DependencyManifestPath = Join-Path $root 'NessStudio.deps.json' }
+$dependencies = Get-Content -LiteralPath $DependencyManifestPath -Raw | ConvertFrom-Json
 if ($manifest.schemaVersion -ne 1) { throw 'Unknown third-party notice schema' }
 $recorded = @{}
 foreach ($entry in $manifest.files) {

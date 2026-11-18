@@ -29,7 +29,7 @@
     </GetFileHash>
     <Error Condition="'%(NessSqlCipherCopiedHash.FileHash)' != '@(NessExpectedSqlCipherHash)'" Text="The copied SQLCipher runtime differs from the pinned source build." />
   </Target>
-  <Target Name="VerifyBundledDatabaseRuntime" BeforeTargets="GenerateSingleFileBundle" DependsOnTargets="PrepareForBundle;ValidatePinnedDatabaseRuntime" Condition="'$(DesignTimeBuild)' != 'true' and '$(PublishSingleFile)' == 'true'">
+  <Target Name="VerifyBundledDatabaseRuntime" BeforeTargets="GenerateSingleFileBundle" DependsOnTargets="PrepareForBundle;ValidatePinnedDatabaseRuntime" Condition="'$(DesignTimeBuild)' != 'true' and '$(PublishSingleFile)' == 'true' and ('$(IncludeNativeLibrariesForSelfExtract)' == 'true' or '$(IncludeAllContentForSelfExtract)' == 'true')">
     <ItemGroup>
       <NessSqlCipherBundleInput Include="@(FilesToBundle)" Condition="'%(FilesToBundle.RelativePath)' == 'e_sqlcipher.dll'" />
     </ItemGroup>
@@ -39,7 +39,7 @@
     </GetFileHash>
     <Error Condition="'%(NessSqlCipherBundleHash.FileHash)' != '@(NessExpectedSqlCipherHash)'" Text="The bundled SQLCipher runtime differs from the pinned source build." />
   </Target>
-  <Target Name="VerifyPublishedDatabaseRuntime" AfterTargets="Publish" DependsOnTargets="ValidatePinnedDatabaseRuntime" Condition="'$(DesignTimeBuild)' != 'true' and '$(PublishSingleFile)' != 'true'">
+  <Target Name="VerifyPublishedDatabaseRuntime" AfterTargets="Publish" DependsOnTargets="ValidatePinnedDatabaseRuntime" Condition="'$(DesignTimeBuild)' != 'true' and ('$(PublishSingleFile)' != 'true' or ('$(IncludeNativeLibrariesForSelfExtract)' != 'true' and '$(IncludeAllContentForSelfExtract)' != 'true'))">
     <GetFileHash Files="$(PublishDir)e_sqlcipher.dll" Algorithm="SHA256">
       <Output TaskParameter="Items" ItemName="NessSqlCipherPublishedHash" />
     </GetFileHash>

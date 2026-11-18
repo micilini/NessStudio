@@ -397,7 +397,7 @@ For a self-contained Windows x64 executable with ReadyToRun enabled, use the **S
 dotnet publish src/NessStudio.App/NessStudio.App.csproj -c Release -p:PublishProfile=Standalone -p:DebugType=embedded
 ```
 
-Distribute `.out/standalone/NessStudio.exe`. It includes the .NET Desktop Runtime, native dependencies, FFmpeg and dependency notices. This profile uses .NET 10's content extraction mode to preserve the relative paths required by those components: the first launch extracts its versioned contents under `%TEMP%\.net`, and later launches reuse that cache. Trimming is disabled for WPF compatibility. The directory-based publish command above remains available for deployments that prefer loose runtime files.
+Distribute the **entire `.out/standalone` directory**. `NessStudio.exe` bundles the managed application and .NET assemblies, while native DLLs remain beside it, FFmpeg stays in `Native/FFmpeg`, and dependency notices retain their relative paths. The package is self-contained: users do not need to install the .NET Desktop Runtime. Both `IncludeNativeLibrariesForSelfExtract` and `IncludeAllContentForSelfExtract` are disabled, so these dependencies are loaded from the published directory. ReadyToRun is enabled and trimming is disabled for WPF compatibility. Do not distribute the executable alone.
 
 MSBuild invokes `cmake/Build-Native.ps1` automatically through `NessStudio.Interop`, then copies the native runtime into the application output. You do not need to build another repository manually for the normal app build. The exact NessMuxer revision is restored from the checked-in source bundle when its submodule is absent; an existing checkout with a different revision fails explicitly.
 
