@@ -31,7 +31,7 @@ Use `-Configuration Debug` for development, or `-NativeBuildDirectory <absolute-
 - `include/nessstudio/nessstudio.h` and `lib/libnessstudio.lib`;
 - `native-build.json`, runtime/dependency manifests, licenses and the supplied x264 source archive.
 
-Place the runtime files beside your executable. Link a C or C++ consumer to `libnessstudio.lib` and add `include/` to its include path. NessMuxer is incorporated into this DLL, so a separate NessMuxer DLL is unnecessary. Export jobs additionally require the pinned FFmpeg executable at the path supplied by the host. The [main README](../../README.md) explains application staging and standalone NessMuxer builds.
+Place the runtime files beside your executable. Link a C or C++ consumer to `libnessstudio.lib` and add `include/` to its include path. NessMuxer is incorporated into this DLL, so a separate NessMuxer DLL is unnecessary. Export jobs additionally require the pinned FFmpeg executable at the path supplied by the host. The [Development Guide](../../DEVELOPMENT.md#generate-the-native-dlls-and-place-them-in-the-app) explains application staging and standalone NessMuxer builds.
 
 The GitHub Actions workflow publishes the same native SDK after tests. It uses `-SkipHardwareTests` to exclude the three scene tests labeled `hardware`, because hosted runners lack a D3D11 video device. Local `-RunTests` includes these tests by default; add `-SkipHardwareTests` on a machine without that device. Test fixtures and synthetic RGB windows are not shipped in this package.
 
@@ -108,4 +108,4 @@ The CLI supports `version --json`, capture diagnostics, configured recordings an
 
 Pins and integrity hashes live in `native/deps/dependencies.lock.json`. NessMuxer remains a separate repository and is consumed at a fixed revision. Its encoder SDK pins are in `native-backends.lock.json` inside that checkout. Build outputs carry fingerprints of native inputs and dependency revisions.
 
-The engine's own source uses the repository's MIT license. The packaged encoder/runtime dependencies retain their own licenses; x264 is GPL. Keep all notices and corresponding source material included by the packaging script. See the [root README](../../README.md#license) for the application package.
+The engine's own source uses the repository's MIT license. The packaged encoder/runtime dependencies retain their own licenses; x264 is GPL. Keep all notices and corresponding source material included by the packaging script. See [Licenses and Redistributions](../../README.md#licenses-and-redistributions) for the application package.

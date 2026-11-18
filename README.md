@@ -1,9 +1,9 @@
 <p align="center">
-  <img width="128" align="center" src="images/logo-nessstudio.png">
+  <img width="128" align="center" src="images/logo-nessstudio.png" alt="NessStudio logo">
 </p>
 
 <h1 align="center">
-  NessStudio For Windows (2.0.0 Beta)
+  NessStudio For Windows (3.0.0 Beta)
 </h1>
 
 <p align="center">
@@ -16,21 +16,21 @@
   </a>
 </p>
 
-[![.NET 8](https://img.shields.io/badge/.NET-8.0-512BD4?style=flat-square&logo=dotnet)](https://dotnet.microsoft.com/)
+[![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?style=flat-square&logo=dotnet)](https://dotnet.microsoft.com/)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?style=flat-square&logo=windows)](https://www.microsoft.com/windows)
 [![WPF](https://img.shields.io/badge/UI-WPF-68217A?style=flat-square)](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/)
-[![WGC](https://img.shields.io/badge/capture-Windows%20Graphics%20Capture-00ADEF?style=flat-square)](https://learn.microsoft.com/en-us/uwp/api/windows.graphics.capture)
+[![libnessstudio](https://img.shields.io/badge/capture-libnessstudio%20%28C%20ABI%29-00ADEF?style=flat-square)](native/libnessstudio/README.md)
 [![NessMuxer](https://img.shields.io/badge/muxer-NessMuxer-orange?style=flat-square)](https://github.com/micilini/NessMuxer)
 [![FFmpeg Export](https://img.shields.io/badge/export-FFmpeg-007808?style=flat-square&logo=ffmpeg)](https://ffmpeg.org/)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](https://github.com/micilini/NessStudio/blob/main/LICENSE)
-[![Version](https://img.shields.io/badge/version-2.0.0--beta-blue?style=flat-square)](https://github.com/micilini/NessStudio/releases)
-[![Status](https://img.shields.io/badge/status-public%20beta-yellow?style=flat-square)]()
+[![Version](https://img.shields.io/badge/version-3.0.0--beta-blue?style=flat-square)](https://github.com/micilini/NessStudio/releases)
+[![Status](https://img.shields.io/badge/status-public%20beta-yellow?style=flat-square)](https://github.com/micilini/NessStudio/releases)
 
 ---
 
 > ⚠️ **Public Beta**
 >
-> NessStudio 2.0.0 is a major architecture update. The current generation is focused on native screen capture, independent recording tracks, reliable session metadata, recording previews, and FFmpeg-based export workflows.
+> NessStudio 3.0.0 moves capture, processing, encoding, and recording lifecycle into **libnessstudio**, a native engine with a public C ABI. The WPF application controls the engine through .NET 10 interop, with independent tracks, live previews, scene recording, recovery metadata, and FFmpeg media jobs.
 
 ---
 
@@ -42,17 +42,18 @@ It is ideal for tutorials, classes, onboarding, technical support, product demos
 
 ## Highlights
 
-- **Windows-native screen capture:** screen recording is powered by Windows Graphics Capture (WGC).
-- **Native muxing path:** screen output is encoded and muxed through [NessMuxer](https://github.com/micilini/NessMuxer).
+- **Native recording engine:** [libnessstudio](native/libnessstudio/README.md) owns screen, webcam, microphone, and system audio capture behind a public C ABI.
+- **Native encoding and muxing:** [NessMuxer](https://github.com/micilini/NessMuxer) is statically linked into the engine, with Intel Quick Sync, NVIDIA NVENC, AMD AMF, and CPU x264 routes.
 - **Independent capture channels:** screen, webcam, microphone, and system audio can be recorded alone or together.
-- **Draw Area support:** capture a full monitor or a custom screen region.
+- **Draw Area support:** capture a full monitor or a custom screen region, with cursor capture.
 - **Draw Area overlay:** custom-region recordings display a visual capture overlay while recording.
-- **Pause / Resume:** pause and continue active sessions without losing the recording state.
-- **Master Session Clock:** sessions store a real start time, stop time, and duration reference for better export sync.
-- **Recording previews:** thumbnails are generated from the screen track first, with webcam fallback.
+- **Live previews and scenes:** independent screen/webcam previews, composed scenes, and optional `program.mkv` output.
+- **Pause / Resume:** pause and continue active sessions through a shared native session clock.
+- **Session metadata and recovery:** project manifests, per-track metadata, and recovery checkpoints preserve recording state and finalized assets.
+- **Recording thumbnails:** previews are generated from the available primary, program, screen, or webcam video asset.
 - **Project library:** recent recordings can be opened, exported, or deleted from the home screen.
 - **FFmpeg export:** generate final MP4, MKV, MP3, WAV, or separated editing tracks from a recording session.
-- **Diagnostics:** optional debug logs help validate capture behavior and troubleshoot issues.
+- **Diagnostics:** optional debug logs and separate error logs help troubleshoot recording and export failures.
 
 ## Application Images
 
@@ -78,17 +79,19 @@ A recording session may contain one or more of these tracks:
 | Source | Output |
 |---|---|
 | Screen | `screen.mkv` |
-| Webcam | `webcam.mp4` |
+| Webcam | `webcam.mkv`, also remuxed to `webcam.mp4` during finalization |
 | Microphone | `mic.wav` |
 | System audio | `system.wav` |
-| Metadata | `manifest.json` and `session.manifest.json` |
+| Composed scene | `program.mkv` when scene recording is enabled |
+| Finalized audio/video output | `final.mkv` when audio sources are included |
+| Metadata | `manifest.json`, `session.manifest.json`, and native track/session records |
 | Preview | `preview.png` when a video track exists |
 
-Audio-only sessions are supported. In that case, no visual preview is generated.
+Files depend on the selected sources and recording mode. Native screen and camera tracks use Matroska, and audio tracks use WAV. Audio-only sessions are supported; they do not generate a visual preview.
 
 ## Export Options
 
-NessStudio 2.0.0 adds a dedicated export workflow based on the recording manifest.
+NessStudio 3.0.0 exports through native media jobs and the pinned FFmpeg runtime, using the project manifest and session timing.
 
 ### Single File
 
@@ -101,6 +104,7 @@ Supported video layouts:
 | No video · Audio only | Exports only the selected audio tracks |
 | Screen only | Exports the screen track |
 | Webcam only | Exports the webcam track |
+| Recorded program | Exports the composed scene recorded in `program.mkv` |
 | Screen + Webcam · Picture-in-picture | Places webcam over the screen |
 | Screen + Webcam · Side by side | Places screen and webcam next to each other |
 
@@ -138,186 +142,197 @@ Export synchronized editing assets into a folder:
 |---|---|
 | `screen.mp4` | Screen track converted/copied for editing |
 | `webcam.mp4` | Webcam track copied for editing |
+| `program.mp4` | Recorded scene, when available and selected |
+| `microphone.wav` | Independent microphone audio, when selected |
+| `system.wav` | Independent system audio, when selected |
 | `audio_mix.wav` | Mixed microphone/system audio |
+
+Completed export files are decoded for validation and receive an `.export.json` receipt. Export offers **Open Folder** beside **Browse** and opens the destination after successful validation.
 
 ## Architecture Overview
 
 ```text
-Screen (WGC)      ──→ WgcScreenCapturePipe       ──→ NessMuxerWriter ──→ screen.mkv
-Webcam (WinRT)    ──→ MediaCaptureWebcamSession  ─────────────────────→ webcam.mp4
-Mic (WASAPI)      ──→ MicCaptureService          ─────────────────────→ mic.wav
-System (WASAPI)   ──→ SystemLoopbackService      ─────────────────────→ system.wav
+WPF application (.NET 10)
+  └─ NessStudio.Core + NessStudio.Infrastructure
+     └─ NessStudio.Interop (public C ABI)
+        └─ libnessstudio.dll
+           ├─ Screen / camera / microphone / system audio capture
+           ├─ D3D11 / CPU processing, scenes, and live previews
+           ├─ NessMuxer (static) → H.264 / MKV video tracks
+           ├─ Native audio writer → WAV microphone / loopback tracks
+           ├─ Shared session clock, commands/events, and recovery journals
+           └─ Native media jobs → FFmpeg finalization, thumbnails, and exports
 
-Session clock     ──→ StartedAtUtc / StoppedAtUtc / DurationMs
-Manifest writer   ──→ manifest.json + session.manifest.json
-Project ingest    ──→ preview.png + local project database
-Export service    ──→ FFmpeg final output / separated tracks
+Project manifests  → manifest.json + session.manifest.json
+Native metadata    → track manifests + recording-native.json + operation journals
+Project library    → preview.png + local SQLCipher database
 ```
 
-The screen track uses [NessMuxer](https://github.com/micilini/NessMuxer) as the encoding and muxing backend. `NessMuxer.dll` is a standalone native C library used by the screen recording pipeline.
+The application sends commands and consumes events, snapshots, and preview frames through **libnessstudio**. The engine exposes a C ABI and implements capture, processing, encoding, and recording lifecycle using C++20 and native Windows APIs.
 
-FFmpeg is used for export only. The application no longer depends on FFmpeg as the main screen-recording engine.
+[NessMuxer](https://github.com/micilini/NessMuxer) is the engine's statically linked encoding/muxing dependency. MSBuild stages `libnessstudio.dll` and its runtime dependencies beside `NessStudio.exe`. FFmpeg runs through explicit native jobs for finalization, thumbnail generation, and exports.
 
-## What Changed Since Version 1.0.0
+## What Changed Since Version 2.0.0
 
-Version 2.0.0 is a major update over the original 1.0.0 release.
+Version 3.0.0 moves the recording pipeline into a native engine and upgrades the application to .NET 10.
 
-### Native Recording Pipeline
+### Native Recording Engine
 
-- Replaced the old FFmpeg-based recording path with a Windows Graphics Capture pipeline.
-- Added `WgcScreenCapturePipe` for screen capture.
-- Added `NessMuxerInterop` and `NessMuxerWriter` for native screen encoding/muxing.
-- Added Media Foundation helpers for thumbnail generation and video metadata reading.
-- Added a persistent screen capture session with improved pause/resume behavior.
-- Added a recording warmup fix so the screen track does not start late after pressing record.
+- Added `libnessstudio.dll` with a public C ABI for capture, processing, encoding, previews, sessions, and media jobs.
+- Replaced the managed recording pipeline with native screen, DirectShow camera, and WASAPI audio capture controlled through .NET interop.
+- Integrated NessMuxer statically into libnessstudio for H.264 encoding and Matroska muxing.
+- Added capability-based Intel Quick Sync, NVIDIA NVENC, AMD AMF, and CPU x264 encoder selection.
+- Added Automatic, GPU hardware, GPU capture with software encoding, and Full Software execution policies, with the effective route stored in recording metadata.
 
-### Independent Recording Channels
+### Recording Modes and Live Previews
 
-- Screen, webcam, microphone, and system audio now behave as independent tracks.
-- Screen output is stored as `screen.mkv`.
-- Webcam output is stored as `webcam.mp4`.
-- Microphone output is stored as `mic.wav`.
-- System audio output is stored as `system.wav`.
-- Audio-only recordings are valid sessions.
+- Kept independent screen, webcam, microphone, and system audio tracks, including audio-only sessions.
+- Added separate-source, composed-program, and program-plus-source recording modes.
+- Added scene composition and `program.mkv` for recorded layouts.
+- Added independent live screen/webcam previews and native CPU/GPU presentation paths.
+- Kept monitor/Draw Area selection, cursor capture, and pause/resume through a shared native clock.
 
-### Session Manifest 2
+### Session Manifests and Recovery
 
-- Added manifest version 2.
-- Added `StartedAtUtc`, `StoppedAtUtc`, and `DurationMs`.
-- Added per-track metadata for screen, webcam, microphone, and system audio.
-- Added crop metadata for Draw Area recordings.
-- Preserved compatibility by writing both `manifest.json` and `session.manifest.json`.
+- Added project manifest schema 3 with asset roles, timing, native route selection, scene metadata, and finalization state.
+- Preserved `manifest.json` and `session.manifest.json` aliases and support for existing version 2 project manifests.
+- Added native track manifests, recording snapshots, operation journals, and recovery checkpoints.
+- Added recovery of finalized, revalidated media into a new project while preserving original assets and interrupted outputs.
+- Added project registration records so a completed recording can be registered again if saving to the library was interrupted.
 
-### Master Session Clock
+### Project Library, Export, and Diagnostics
 
-- Added a real session-duration reference independent of individual track lengths.
-- The app records the true start/stop time of the recording session.
-- Export uses the session duration when available to reduce timing drift between video and audio.
-
-### Draw Area Improvements
-
-- Added a visual overlay for custom region recordings.
-- Overlay appears during recording, hides on pause, returns on resume, and closes on stop.
-- Added protection for invalid Draw Area selections that span multiple monitors or fall outside the selected screen.
-
-### Export Workflow
-
-- Added a dedicated Export Recording window.
-- Added Single file export.
-- Added Separate tracks export.
-- Added MP4 and MKV video export.
-- Added MP3 and WAV audio-only export.
-- Added screen-only, webcam-only, picture-in-picture, and side-by-side layouts.
-- Added microphone/system audio mix controls.
-- Added audio quality presets for MP3 and WAV.
-- Added validation to prevent empty exports, such as “no video + no audio”.
-- Added FFmpeg discovery under `Native/FFmpeg/ffmpeg.exe`.
-
-### Project Library Improvements
-
-- Replaced the old delete-only action with a more complete options menu.
-- Added Open, Export, and Delete actions for recent recordings.
-- Improved thumbnail loading and fallback behavior.
-- Improved project deletion flow.
-
-### Preview Improvements
-
-- Recording previews now prefer `screen.mkv` first.
-- If no screen track exists, previews fall back to `webcam.mp4`.
-- Audio-only recordings intentionally show no visual preview.
-
-### Preferences and Diagnostics
-
-- Added recording preferences persisted as JSON.
-- Added selectable FPS options.
-- Added selectable countdown timer options.
-- Added debug log toggling from the About window.
-- Added performance/diagnostic helpers for recording validation.
-
-### User Interface Refresh
-
-- Updated the Home screen visual style.
-- Updated the Menu/sidebar visual style.
-- Updated Recent Recordings cards.
-- Updated About screen.
-- Updated Recording screen.
-- Updated Saving Recording screen.
-- Updated Splash screen.
-- Added a modern dark theme with rounded panels, improved spacing, and consistent red accent styling.
+- Moved finalization, thumbnails, and exports into supervised native jobs using the pinned FFmpeg runtime.
+- Added recorded-program export and optional independent microphone/system audio editing tracks.
+- Added output decoding and completion receipts for successful exports.
+- Added **Open Folder** controls and automatic destination opening after export validation.
+- Kept the compact four-card recorder with independent previews and refreshed recording/project controls.
+- Moved new recording workspaces to `%LOCALAPPDATA%\NessStudio\Recordings`, while preserving existing project locations.
+- Added a hash-verified SQLCipher database runtime and reproducible dependency staging.
+- Kept detailed recording diagnostics behind **Enable Debug Logs**, with failures written to a separate error log.
 
 ### Project Structure
 
-- Removed old FFmpeg recording helper classes from the previous pipeline.
-- Added the `Recording/` namespace with session, WGC, Media Foundation, and NessMuxer-related components.
-- Added `View/ExportScreen`.
-- Added `View/DrawAreaScreen/CaptureOverlayWindow`.
-- Added `View/SavingRecordingScreen`.
-- Added new image assets for detected track cards and export UI.
-- Updated project settings to target `net8.0-windows10.0.19041.0`.
+- `src/NessStudio.App`: WPF screens, view models, application composition, and preview presentation.
+- `src/NessStudio.Core`: shared domain models and recording contracts.
+- `src/NessStudio.Infrastructure`: native recording orchestration, project storage/recovery, database, and export services.
+- `src/NessStudio.Interop`: native ABI declarations, handle ownership, and managed engine/session/job wrappers.
+- `native/libnessstudio`: engine implementation and public C header; `native/nessstudio-cli`: command-line host.
+- `native/tests` and `tests`: native tests and managed ABI, recording, project, and UI probes.
+- `cmake`: native builds, pinned runtime restoration, staging, and dependency notice verification.
+- The WPF application, infrastructure, and interop projects target `net10.0-windows10.0.19041.0`; the shared Core library targets `net10.0`. Native presets target Windows x64.
 
 ## How to Run Locally
 
 **Requirements:**
 
-- Windows 10 or 11 x64
-- Visual Studio Community 2022 or newer
-- .NET 8 SDK / runtime support
-- .NET desktop development workload
+- Windows 10 build 19041 or newer / Windows 11, x64
+- [Visual Studio Community 2026 or newer](https://learn.microsoft.com/en-us/dotnet/core/install/windows), with the **.NET desktop development** and **Desktop development with C++** workloads
+- .NET 10 SDK matching [`global.json`](global.json)
+- v145 x64 C++ toolset, CMake, and Windows SDK 10.0.26100.0 for the checked-in native build preset
+- Git, PowerShell, and internet access for NuGet and the first FFmpeg restore
 
 **Steps:**
 
-1. Clone the repository.
-2. Open `NessStudio.sln` in Visual Studio.
-3. Make sure `NessMuxer.dll` exists under `NessStudio/Native/NessMuxer/`.
-4. For export support, place `ffmpeg.exe` under `NessStudio/Native/FFmpeg/ffmpeg.exe`.
-5. Build and run the project with `F5`.
+1. In a PowerShell terminal, clone the repository:
 
-The native `NessMuxer.dll` dependency is copied to the output directory during build. FFmpeg is used by the export workflow and is copied when present.
+   ```powershell
+   git clone https://github.com/micilini/NessStudio.git
+   cd NessStudio
+   ```
+
+2. Restore the pinned FFmpeg runtime:
+
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File cmake/Restore-MediaTools.ps1
+   ```
+
+3. Open `NessStudio.sln` in Visual Studio and select `NessStudio.App` as the startup project.
+4. Select the **x64** platform and build the solution. MSBuild builds `libnessstudio.dll` and stages it with the x264/C++ runtime dependencies beside `NessStudio.exe`; SQLCipher and `Native/FFmpeg/ffmpeg.exe` are also copied automatically.
+5. Run the application with `F5`.
+
+NessMuxer is statically linked into `libnessstudio.dll`. The V3 application loads this engine directly, with its matching runtime files. Framework-dependent published packages require the **.NET 10 Desktop Runtime**; the Standalone package includes it.
+
+## Development Guide
+
+See the [Development Guide](DEVELOPMENT.md) for build/publish commands, native DLL generation and deployment, automated verification, the repository layout, and database runtime rebuilding.
 
 ## Generated Recording Folder Example
 
+Example of a finalized recording with all four sources and optional exports:
+
 ```text
-Recording Folder/
+recording/
 ├─ screen.mkv
+├─ screen.mkv.manifest.json
+├─ screen.mkv.session-<id>.json
+├─ webcam.mkv
+├─ webcam.mkv.manifest.json
 ├─ webcam.mp4
+├─ webcam.mp4.export.json
 ├─ mic.wav
 ├─ system.wav
+├─ final.mkv
+├─ final.mkv.export.json
 ├─ manifest.json
 ├─ session.manifest.json
+├─ recording-native.json
+├─ native-camera-export.json
+├─ native-export.json
+├─ project-recovery.json
+├─ project-registration.json
 ├─ preview.png
+├─ preview.png.thumbnail.json
 └─ Exports/
    ├─ recording_export.mp4
+   ├─ recording_export.mp4.export.json
    └─ recording_tracks/
       ├─ screen.mp4
       ├─ webcam.mp4
       └─ audio_mix.wav
 ```
 
-## Current Beta Notes
+Scene modes can also write `program.mkv` and `program.mkv.manifest.json`; audio-only sessions use `audio.native.json`. Native jobs add `*.job-<id>.json` journals, and each exported track has its own `.export.json` receipt. IDs and files vary with the selected sources, recording mode, and completed operations.
 
-NessStudio 2.0.0 is ready for public beta testing, but it should still be labeled as beta.
+Interrupted operations can leave `.pending` or partial files and `recording-incomplete.json`. Recovery may also write `recovery-result.json` and a `recovered-*` directory. These records preserve evidence and original assets; unfinished media is not automatically certified as recovered.
 
-Areas still worth testing before calling it stable:
+## What V3 Does
 
-- Long recordings with screen + webcam + microphone + system audio.
-- Screen frame pacing and timeline seek behavior in `screen.mkv`.
-- Export sync on longer gameplay or tutorial sessions.
-- Clean installation on a fresh Windows 10/11 machine.
-- Missing-dependency behavior when `ffmpeg.exe` or `NessMuxer.dll` is not present.
-- Different monitor setups, DPI scales, and Draw Area selections.
+- Record a monitor or a selected screen region, with cursor capture.
+- Record a webcam, microphone, and system audio independently or together, including audio-only sessions.
+- Keep separate source tracks or record a composed scene, with screen/camera layouts and previews.
+- Pause and resume through a shared session clock; write manifests and recovery checkpoints for interrupted recordings.
+- Encode H.264 through Intel Quick Sync, NVIDIA NVENC, AMD AMF, or CPU x264, according to the selected policy and actual device capabilities.
+- Provide explicit GPU, GPU capture with software encoding, and full software modes. Automatic mode can select a software route when hardware capabilities are unavailable; invalid configurations and driver failures remain visible errors.
+- Manage recorded projects, generate thumbnails, and export video, audio, or separate editing tracks using the pinned FFmpeg runtime.
+
+New recording workspaces are stored in `%LOCALAPPDATA%\NessStudio\Recordings`. Detailed diagnostics are written to `%LOCALAPPDATA%\NessStudio\Logs\recording-debug.log` only while **Enable Debug Logs** is checked in About. Disabling it stops new diagnostic entries without deleting existing logs. Failures are recorded separately in `recording-errors.log`.
+
+Existing projects retain their original locations, and recovery also checks the former `Documents\NessStudio\Recordings` folder. Recovery copies finalized, revalidated assets into a new project; it does not certify unfinished MKV/WAV tails.
+
+The application and capture engine currently target **Windows x64**. Hardware encoding requires a compatible device and driver; a GPU brand alone does not guarantee encoder availability. Linux and macOS capture backends are not implemented in libnessstudio. NessMuxer is a separate project with its own platform support. A successful build does not certify every camera, driver, GPU, or recording duration.
 
 ## Built With
 
-- C# / .NET 8
+- C# 14 / .NET 10
 - Windows Presentation Foundation (WPF)
-- SQLite
-- Windows Graphics Capture (WGC)
-- NessMuxer — native C screen encoding/muxing backend
-- FFmpeg — final export workflow
-- NAudio — WASAPI microphone and system audio capture
-- MaterialDesignThemes — WPF UI components
+- libnessstudio — native recording engine with a public C ABI and C++20 implementation
+- Native Windows APIs — D3D11 processing/previews, DirectShow cameras, and WASAPI audio
+- NessMuxer — statically linked encoding/muxing backend with Quick Sync, NVENC, AMF, and x264
+- SQLCipher / SQLite — local project database with a pinned native runtime
+- FFmpeg — native jobs for finalization, thumbnails, and exports
+- NAudio — managed WAV metadata helpers
+- MaterialDesignThemes / MaterialDesignColors — WPF UI components
 
 ## Version History
+
+### Version 3.0.0 Beta — Native Recording Engine
+
+NessStudio is a Windows recording application for screens, webcams, microphones, and system audio. Version 3 moves capture, processing, encoding, and recording lifecycle into **libnessstudio**, a native library with a public C ABI. The WPF application controls the engine through .NET 10 interop.
+
+Adds capability-based Quick Sync/NVENC/AMF/x264 encoding, explicit GPU/software policies, independent live previews, composed scenes and program tracks, shared-clock sessions, project manifest schema 3, operation journals, and recovery of finalized media. Finalization, thumbnails, and MP4/MKV/MP3/WAV exports run through native jobs using the pinned FFmpeg runtime.
+
+Updates the recording/project controls, recording storage and diagnostic logs, SQLCipher runtime verification, and reproducible native SDK/application packaging. The product remains a public beta for Windows x64.
 
 ### Version 2.0.0 Beta
 
@@ -335,144 +350,8 @@ Initial public version. Provided Windows screen, webcam, microphone, and system 
 
 Want to create new features for **NessStudio**? Create a new feature branch and submit a Pull Request. Feel free to open issues for bug fixes, improvements, or feature requests.
 
-## License
+## Licenses and Redistributions
 
-This project is open-source and available under the [MIT License](https://github.com/micilini/NessStudio/blob/main/LICENSE).
+NessStudio's own source is covered by the [MIT License](LICENSE). Bundled components retain their own licenses, including x264/FFmpeg GPL terms and the notices for SQLCipher, OpenSSL, SDK headers, and managed packages. The native staging and publish steps preserve these notices and the supplied x264 source archive. The MIT license does not override the redistribution requirements of bundled dependencies.
 
----
-
-## Version 3.0.0 — Native Recording Engine
-
-[![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?style=flat-square&logo=dotnet)](global.json)
-[![Version 3.0.0](https://img.shields.io/badge/version-3.0.0-blue?style=flat-square)](https://github.com/micilini/NessStudio/releases)
-
-The presentation above preserves the Version 2.0.0 Beta documentation and screenshots. **The current `main` branch is Version 3.0.0.** The requirements, architecture, build commands and DLL locations in this section replace the V2 instructions above; use this section when building or deploying the current app.
-
-NessStudio is a Windows recording application for screens, webcams, microphones and system audio. Version 3 moves capture, processing, encoding and recording lifecycle into **libnessstudio**, a native library with a public C ABI. The WPF application controls the engine through .NET interop.
-
-### What V3 does
-
-- Record a monitor or a selected screen region, with cursor capture.
-- Record a webcam, microphone and system audio independently or together, including audio-only sessions.
-- Keep separate source tracks or record a composed scene, with screen/camera layouts and previews.
-- Pause and resume through a shared session clock; write manifests and recovery checkpoints for interrupted recordings.
-- Encode H.264 through Intel Quick Sync, NVIDIA NVENC, AMD AMF or CPU x264, according to the selected policy and actual device capabilities.
-- Provide explicit GPU, GPU capture with software encoding, and full software modes. Automatic mode can select a software route when hardware capabilities are unavailable; invalid configurations and driver failures remain visible errors.
-- Manage recorded projects, generate thumbnails, and export video, audio or separate editing tracks using the pinned FFmpeg runtime.
-
-Screens and camera sources produce Matroska tracks; microphone and loopback audio are stored as WAV. Scene recordings can also produce `program.mkv`. Project/session manifests describe the files, timestamps and selected routes. Export formats include MP4, MKV, MP3 and WAV.
-
-The Windows recorder keeps the compact four-card layout, with independent screen and webcam previews. New recording workspaces are stored in `%LOCALAPPDATA%\NessStudio\Recordings`. Detailed diagnostics are written to `%LOCALAPPDATA%\NessStudio\Logs\recording-debug.log` only while **Enable Debug Logs** is checked in About. Disabling it stops new diagnostic entries without deleting existing logs. Failures are recorded separately in `recording-errors.log`. Existing projects retain their original locations, and recovery also checks the former `Documents\NessStudio\Recordings` folder. Export offers **Open Folder** beside **Browse** and automatically opens the destination after successful validation of the exported files.
-
-The application and capture engine currently target **Windows x64**. Neither Linux nor macOS capture backends are implemented in libnessstudio. NessMuxer is a separate project with its own platform support. A successful build does not certify every camera, driver, GPU or recording duration.
-
-### Requirements
-
-To run: Windows 10 build 19041 or newer / Windows 11, x64. Framework-dependent packages require the **.NET 10 Desktop Runtime**. Hardware encoding additionally requires a compatible device and driver; a GPU brand alone does not guarantee encoder availability.
-
-To build:
-
-- Git and PowerShell.
-- The .NET SDK pinned in [`global.json`](global.json).
-- Visual Studio 2026 with Desktop development with C++, the v145 x64 toolset, CMake and Windows SDK 10.0.26100.0. Visual Studio's CMake executable must be on `PATH` for direct `cmake` commands; the PowerShell native build script locates it automatically.
-- Internet access for NuGet and the first FFmpeg restore. Native dependency sources and encoder headers are pinned locally.
-
-### Build the app
-
-Run from the repository root:
-
-```powershell
-git clone https://github.com/micilini/NessStudio.git
-cd NessStudio
-powershell -NoProfile -ExecutionPolicy Bypass -File cmake/Restore-MediaTools.ps1
-dotnet build NessStudio.sln -c Release -p:Platform=x64
-dotnet publish src/NessStudio.App/NessStudio.App.csproj -c Release -r win-x64 --self-contained false -o .out/app
-```
-
-Launch `.out/app/NessStudio.exe`. Publish with `--self-contained true` when you want to include the .NET runtime. Keep the complete publish directory together.
-
-For a self-contained Windows x64 executable with ReadyToRun enabled, use the **Standalone** publish profile:
-
-```powershell
-dotnet publish src/NessStudio.App/NessStudio.App.csproj -c Release -p:PublishProfile=Standalone -p:DebugType=embedded
-```
-
-Distribute the **entire `.out/standalone` directory**. `NessStudio.exe` bundles the managed application and .NET assemblies, while native DLLs remain beside it, FFmpeg stays in `Native/FFmpeg`, and dependency notices retain their relative paths. The package is self-contained: users do not need to install the .NET Desktop Runtime. Both `IncludeNativeLibrariesForSelfExtract` and `IncludeAllContentForSelfExtract` are disabled, so these dependencies are loaded from the published directory. ReadyToRun is enabled and trimming is disabled for WPF compatibility. Do not distribute the executable alone.
-
-MSBuild invokes `cmake/Build-Native.ps1` automatically through `NessStudio.Interop`, then copies the native runtime into the application output. You do not need to build another repository manually for the normal app build. The exact NessMuxer revision is restored from the checked-in source bundle when its submodule is absent; an existing checkout with a different revision fails explicitly.
-
-### Generate the native DLLs and place them in the app
-
-| Component | How it is built | Where it goes |
-|---|---|---|
-| `libnessstudio.dll` | Built from `native/libnessstudio` by `cmake/Build-Native.ps1` | Beside `NessStudio.exe`; MSBuild copies it automatically |
-| NessMuxer | Built **statically into `libnessstudio.dll`** from `native/deps/NessMuxer` | No separate `NessMuxer.dll` is required by the V3 app |
-| `libx264-164.dll`, C++ runtime DLLs | Staged with the native library | Beside `libnessstudio.dll`; keep the accompanying licenses and source archive |
-| `e_sqlcipher.dll` | Pinned database runtime in `cmake/sqlcipher/runtime/win-x64` | Copied automatically into the app output |
-| `ffmpeg.exe` | Restored by `cmake/Restore-MediaTools.ps1` | Copied with its notices into `Native/FFmpeg` in the app output |
-
-To generate a standalone native SDK, including the DLL, public header, import library, CLI and redistribution notices:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File cmake/Build-Native.ps1 -Configuration Release -StageDirectory .out/libnessstudio-sdk -RunTests -Sdk
-```
-
-The compiler output is `.out/native/windows-x64/Release`; the ready-to-use SDK is `.out/libnessstudio-sdk`. For manual deployment into an already published application, copy the **runtime files from the SDK root** beside `NessStudio.exe`, preserving their relative location and notices. `include/` and `lib/` are development files and need not ship with the application. Use matching x64 Release builds, and do not substitute a DLL from a different ABI or dependency revision.
-
-To build **NessMuxer.dll for a separate consumer**, run these commands in the [NessMuxer repository](https://github.com/micilini/NessMuxer):
-
-```powershell
-cmake --preset windows-x64
-cmake --build --preset windows-x64 --parallel 3
-ctest --preset windows-x64 --no-tests=error
-cmake --install .out/windows-x64 --config Release --prefix .out/package
-```
-
-That DLL and its runtime dependencies are in `.out/package/bin`, its import library in `.out/package/lib`, and public headers in `.out/package/include`. Place the DLLs beside the executable that consumes **NessMuxer directly**. Copying `NessMuxer.dll` into NessStudio does not replace the statically linked implementation: update the pinned source and rebuild libnessstudio instead.
-
-See the [libnessstudio README](native/libnessstudio/README.md) for C integration, ownership rules, capture policies and native tests.
-
-### Automated builds and verification
-
-The [Windows workflow](.github/workflows/build-windows.yml) builds the native SDK, runs CTest and the managed ABI probe against both the build output and the published runtime, builds/publishes the WPF app, verifies third-party notices, and uploads the SDK and application packages. Artifacts are available on the workflow run page. CI excludes three scene tests labeled `hardware`, which require a D3D11 video device. Local `-RunTests` includes them by default; add `-SkipHardwareTests` on machines without that device. CI does not replace tests on physical devices.
-
-Local checks:
-
-```powershell
-dotnet run --project tests/NessStudio.AbiProbe -c Release
-powershell -NoProfile -ExecutionPolicy Bypass -File cmake/Test-ThirdPartyNotices.ps1 -PublishedDirectory .out/app
-```
-
-On a Windows desktop with a camera, microphone, system audio endpoint and supported hardware encoder, `dotnet run --project tests/NessStudio.UiProbe -c Release -- C:/ness-ui-check` exercises the splash, independent previews, source failure/recovery and window restoration. It records all 15 nonempty source combinations in each of the four modes, then decodes every retained track and checks its duration and video frame count. Use a new output directory: the probe opens test windows and writes short recordings to an isolated profile. Append `Automatic` or `FullSoftware` to observe both previews for eight minutes, with frame-progress checks. These interactive checks are separate from CI.
-
-For the About log preference, recording options menu and export folder controls, append `workflow C:/path/to/existing-recording` instead. Supply a finalized recording containing screen, webcam, microphone and system audio tracks. This check exports into its new evidence directory, decodes each result, and verifies that Explorer opens the correct destination for single-file and separate-track exports. It closes only the Explorer windows opened for those test destinations.
-
-The app's splash and About windows obtain `3.0.0` from the assembly version metadata. Native ABI versions and project/database schema versions are separate contracts and do not track the product's major version.
-
-### Repository layout
-
-| Directory | Purpose |
-|---|---|
-| `src` | WPF app, domain models, infrastructure and native interop |
-| `native/libnessstudio` | Engine implementation and public C header |
-| `native/tests`, `tests` | Native and managed contract/regression tests |
-| `native/deps` | Pinned dependency sources, headers, runtimes and source bundles |
-| `cmake` | Reproducible build, runtime staging and notice verification |
-| `licenses` | Redistributable third-party notices |
-| `.github/workflows` | CI build/test/package jobs |
-
-RGB patterns and synthetic capture windows exist only in test fixtures; they are not part of the application recording flow or the published runtime package.
-
-### Database runtime
-
-The app uses the checked-in, SHA-256-verified SQLCipher runtime. To rebuild it, use a Visual Studio x64 developer shell, Python 3.10+ and CMake:
-
-```powershell
-python cmake/sqlcipher/build_runtime.py --work-directory C:/ness-sqlcipher/work --cache C:/ness-sqlcipher/cache --output C:/ness-sqlcipher/package
-```
-
-Use new work/output directories. The recipe downloads the exact sources/tools from `cmake/sqlcipher/sources.lock.json`, builds and tests its dependencies, and emits provenance. Replacing the committed runtime also requires updating its SHA-256 record and validating existing encrypted databases; the normal app build does not rebuild cryptography.
-
-### V3 licenses and redistribution
-
-NessStudio's own source is covered by [MIT](LICENSE). Bundled components retain their own licenses, including x264/FFmpeg GPL terms and the notices for SQLCipher, OpenSSL, SDK headers and managed packages. The native staging and publish steps preserve these notices and the supplied x264 source archive. The MIT license does not override the redistribution requirements of bundled dependencies.
+Keep the complete published package together, including native runtime files, `Native/FFmpeg`, dependency notices, and source material supplied by the build. See [`licenses/third-party`](licenses/third-party) and the [Development Guide](DEVELOPMENT.md#build-the-app) for packaging details.
