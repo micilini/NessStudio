@@ -135,7 +135,11 @@ namespace NessStudio.Components.RecentProjects
                 Tag = model.ProjectFolderPath
             };
 
-            var root = new StackPanel();
+            var root = new Grid();
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(thumbHeight) });
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(40) });
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(20) });
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
             var thumbBorder = new Border
             {
@@ -255,76 +259,47 @@ namespace NessStudio.Components.RecentProjects
                 }, TaskScheduler.FromCurrentSynchronizationContext());
             }
 
-            var titleBox = new TextBox
+            string title = string.IsNullOrWhiteSpace(model.Title) ? "Unknown Title" : model.Title;
+            var titleText = new TextBlock
             {
-                Margin = new Thickness(0, 8, 0, 0),
-                Text = string.IsNullOrWhiteSpace(model.Title) ? "Unknown Title" : model.Title,
+                Text = title,
+                ToolTip = title,
                 FontSize = 15,
                 FontFamily = new FontFamily("Arial"),
                 FontWeight = FontWeights.Bold,
                 Foreground = fg,
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                Padding = new Thickness(0),
-                IsReadOnly = true,
-                IsTabStop = false,
-                Cursor = Cursors.IBeam,
-                TextWrapping = TextWrapping.Wrap
+                VerticalAlignment = VerticalAlignment.Center,
+                MaxHeight = 36,
+                LineHeight = 18,
+                LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+                TextWrapping = TextWrapping.Wrap,
+                TextTrimming = TextTrimming.CharacterEllipsis
             };
 
-            var sizeBox = new TextBox
+            var sizeText = new TextBlock
             {
-                Margin = new Thickness(0, 8, 0, 0),
                 Text = model.FileSizeBytes > 0 ? model.FileSizeHuman : "—",
                 FontSize = 14,
                 FontFamily = new FontFamily("Arial"),
                 FontWeight = FontWeights.Medium,
                 Foreground = fg,
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                Padding = new Thickness(0),
-                IsReadOnly = true,
-                IsTabStop = false,
-                Cursor = Cursors.IBeam,
-                TextWrapping = TextWrapping.Wrap
+                VerticalAlignment = VerticalAlignment.Center
             };
 
-            var dateBox = new TextBox
+            var dateText = new TextBlock
             {
                 VerticalAlignment = VerticalAlignment.Center,
-                VerticalContentAlignment = VerticalAlignment.Center,
                 Text = model.UpdatedAt.ToString("dd/MM/yyyy HH:mm"),
                 FontSize = 12,
                 FontFamily = new FontFamily("Arial"),
                 FontWeight = FontWeights.Medium,
-                Foreground = fg,
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                Padding = new Thickness(0),
-                IsReadOnly = true,
-                IsTabStop = false,
-                Cursor = Cursors.IBeam,
-                TextWrapping = TextWrapping.Wrap,
-                TextAlignment = TextAlignment.Left
+                Foreground = fg
             };
 
-            TextFieldAssist.SetDecorationVisibility(titleBox, Visibility.Collapsed);
-            TextFieldAssist.SetUnderlineBrush(titleBox, Brushes.Transparent);
-            TextFieldAssist.SetDecorationVisibility(sizeBox, Visibility.Collapsed);
-            TextFieldAssist.SetUnderlineBrush(sizeBox, Brushes.Transparent);
-            TextFieldAssist.SetDecorationVisibility(dateBox, Visibility.Collapsed);
-            TextFieldAssist.SetUnderlineBrush(dateBox, Brushes.Transparent);
-
-            titleBox.FocusVisualStyle = null;
-            sizeBox.FocusVisualStyle = null;
-            dateBox.FocusVisualStyle = null;
-
-            var bottomGrid = new Grid { Margin = new Thickness(0, 8, 0, 0) };
-            bottomGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            bottomGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            Grid.SetColumn(dateBox, 0);
-            bottomGrid.Children.Add(dateBox);
+            var titleGrid = new Grid { Margin = new Thickness(0, 4, 0, 0) };
+            titleGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            titleGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            titleGrid.Children.Add(titleText);
 
             var optionsBtn = new Button
             {
@@ -334,17 +309,14 @@ namespace NessStudio.Components.RecentProjects
                 VerticalAlignment = VerticalAlignment.Center,
                 Padding = new Thickness(0),
                 Margin = new Thickness(8, 0, 0, 0),
-                Background = Brushes.Transparent,
-                BorderBrush = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
                 Cursor = Cursors.Hand,
                 Tag = model,
                 ToolTip = "More options",
                 Content = new PackIcon
                 {
                     Kind = PackIconKind.DotsVertical,
-                    Width = 20,
-                    Height = 20,
+                    Width = 24,
+                    Height = 24,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center
                 }
@@ -354,12 +326,15 @@ namespace NessStudio.Components.RecentProjects
             optionsBtn.Click += (s, e) => OpenOptionsMenu(optionsBtn, model, card);
 
             Grid.SetColumn(optionsBtn, 1);
-            bottomGrid.Children.Add(optionsBtn);
+            titleGrid.Children.Add(optionsBtn);
 
+            Grid.SetRow(titleGrid, 1);
+            Grid.SetRow(sizeText, 2);
+            Grid.SetRow(dateText, 3);
             root.Children.Add(thumbBorder);
-            root.Children.Add(titleBox);
-            root.Children.Add(sizeBox);
-            root.Children.Add(bottomGrid);
+            root.Children.Add(titleGrid);
+            root.Children.Add(sizeText);
+            root.Children.Add(dateText);
 
             card.Child = root;
             return card;

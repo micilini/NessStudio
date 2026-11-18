@@ -63,22 +63,39 @@ internal static partial class Program
         home.Show();
         var recent = (RecentProjectsControl)((HomeScreenWindowVM)home.DataContext).ProjectsContent;
         await UntilAsync(() => !recent.RecentProjectsControlVM.IsLoadingProjectBlockVisible, "Recent recordings did not load.");
-        await recent.RenderProjectsAsync([model]);
         recent.RecentProjectsControlVM.IsNoneProjectBlockVisible = false;
         recent.RecentProjectsControlVM.IsProjectBlockVisible = true;
-        home.UpdateLayout();
-        await Task.Delay(250);
-        var menu = Descendants<Button>(recent).Single(button => Equals(button.ToolTip, "More options"));
-        var icon = (PackIcon)menu.Content;
-        Point center = icon.TranslatePoint(new Point(icon.ActualWidth / 2, icon.ActualHeight / 2), menu);
-        Check(Math.Abs(center.X - menu.ActualWidth / 2) < 1 && Math.Abs(center.Y - menu.ActualHeight / 2) < 1,
-            "The recording options icon is not centered.");
-        Screenshot(home, "recording-options");
-        menu.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-        Check(menu.ContextMenu?.IsOpen == true, "The recording options menu did not open.");
-        menu.ContextMenu!.IsOpen = false;
+        string[] titles = [model.Title, Path.GetFileName(source), "Screen recording with webcam, microphone and system audio - " + new string('W', 120)];
+        for (int index = 0; index < titles.Length; index++)
+        {
+            model.Title = titles[index];
+            await recent.RenderProjectsAsync([model]);
+            home.UpdateLayout();
+            await Task.Delay(250);
+            var menu = Descendants<Button>(recent).Single(button => Equals(button.ToolTip, "More options"));
+            var icon = (PackIcon)menu.Content;
+            Point center = icon.TranslatePoint(new Point(icon.ActualWidth / 2, icon.ActualHeight / 2), menu);
+            Check(Math.Abs(center.X - menu.ActualWidth / 2) < 1 && Math.Abs(center.Y - menu.ActualHeight / 2) < 1,
+                "The recording options icon is not centered.");
+            var card = Descendants<Border>(recent).Single(border => Equals(border.Tag, source));
+            Rect cardBounds = new Rect(card.RenderSize);
+            Rect menuBounds = menu.TransformToAncestor(card).TransformBounds(new Rect(menu.RenderSize));
+            Check(cardBounds.Contains(menuBounds), "A recording title pushed its menu outside the card.");
+            var title = Descendants<TextBlock>(card).Single(text => text.Text == model.Title);
+            Rect titleBounds = title.TransformToAncestor(card).TransformBounds(new Rect(title.RenderSize));
+            Check(!titleBounds.IntersectsWith(menuBounds) && Math.Abs(titleBounds.Top + titleBounds.Height / 2 - menuBounds.Top - menuBounds.Height / 2) < 1,
+                "The menu overlaps the recording title or is no longer beside it.");
+            foreach (var label in Descendants<TextBlock>(card))
+                Check(cardBounds.Contains(label.TransformToAncestor(card).TransformBounds(new Rect(label.RenderSize))),
+                    "Recording metadata is clipped by the card.");
+            Screenshot(home, "recording-options-" + index);
+            menu.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            Check(menu.ContextMenu?.IsOpen == true, "The recording options menu did not open.");
+            menu.ContextMenu!.IsOpen = false;
+        }
+        model.Title = titles[0];
         home.Close();
-        Results.Add(new { name = "recording-options-visible-centered-and-clickable" });
+        Results.Add(new { name = "recording-options-contained-beside-title-and-clickable", titleLengths = titles.Select(title => title.Length).ToArray() });
 
         var export = new ExportScreenWindow(model);
         export.Show();
