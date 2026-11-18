@@ -1,5 +1,6 @@
 ﻿using System;
 using SQLite;
+using System.Globalization;
 namespace NessStudio.Models
 {
     [Table("Projects")]
@@ -11,6 +12,29 @@ namespace NessStudio.Models
         public string ProjectId { get; set; } = Guid.NewGuid().ToString("N");
         [Indexed]
         public string Title { get; set; } = "Untitled Recording";
+        /// <summary>Shows automatic recording names as a local date and time while retaining custom titles.</summary>
+        [Ignore]
+        public string DisplayTitle
+        {
+            get
+            {
+                string title = Title;
+                if (string.IsNullOrWhiteSpace(title)) return "Untitled Recording";
+                ReadOnlySpan<char> timestamp = title.AsSpan();
+                string format = "yyyyMMdd_HHmmss";
+                if (title.Length == 26 && title[19] == '_' &&
+                    timestamp[20..].IndexOfAnyExcept("0123456789abcdefABCDEF") < 0)
+                {
+                    timestamp = timestamp[..19];
+                    format = "yyyyMMdd_HHmmss_fff";
+                }
+                else if (title.Length != 15) return title;
+
+                return DateTime.TryParseExact(timestamp, format, CultureInfo.InvariantCulture, DateTimeStyles.None, out var recordedAt)
+                    ? recordedAt.ToString("yyyy_MM_dd HH:mm:ss", CultureInfo.InvariantCulture)
+                    : title;
+            }
+        }
         public string ThumbnailPath { get; set; } = string.Empty;
         public string ProjectFolderPath { get; set; } = string.Empty;
         public string ProjectFilePath { get; set; } = string.Empty;

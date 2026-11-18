@@ -57,7 +57,7 @@ internal static partial class Program
 
         var document = NessStudio.Recording.ProjectManifestStore.Read(source);
         var model = new ProjectsModel { Title = "Export verification", ProjectFolderPath = source,
-            ProjectFilePath = document.AuthorityPath, UpdatedAt = DateTime.Now,
+            ProjectFilePath = document.AuthorityPath, UpdatedAt = DateTime.Now, FileSizeBytes = 59_779_318,
             ThumbnailPath = Path.Combine(source, "preview.png") };
         var home = new HomeScreenWindow();
         home.Show();
@@ -65,10 +65,11 @@ internal static partial class Program
         await UntilAsync(() => !recent.RecentProjectsControlVM.IsLoadingProjectBlockVisible, "Recent recordings did not load.");
         recent.RecentProjectsControlVM.IsNoneProjectBlockVisible = false;
         recent.RecentProjectsControlVM.IsProjectBlockVisible = true;
-        string[] titles = [model.Title, Path.GetFileName(source), "Screen recording with webcam, microphone and system audio - " + new string('W', 120)];
+        string[] titles = [model.Title, "20261118_132456_123_abcdef", "Screen recording with webcam, microphone and system audio - " + new string('W', 120)];
         for (int index = 0; index < titles.Length; index++)
         {
             model.Title = titles[index];
+            if (index == 1) Check(model.DisplayTitle == "2026_11_18 13:24:56", "Automatic recording names are not readable dates and times.");
             await recent.RenderProjectsAsync([model]);
             home.UpdateLayout();
             await Task.Delay(250);
@@ -81,10 +82,13 @@ internal static partial class Program
             Rect cardBounds = new Rect(card.RenderSize);
             Rect menuBounds = menu.TransformToAncestor(card).TransformBounds(new Rect(menu.RenderSize));
             Check(cardBounds.Contains(menuBounds), "A recording title pushed its menu outside the card.");
-            var title = Descendants<TextBlock>(card).Single(text => text.Text == model.Title);
+            var title = Descendants<TextBlock>(card).Single(text => text.Text == model.DisplayTitle);
             Rect titleBounds = title.TransformToAncestor(card).TransformBounds(new Rect(title.RenderSize));
             Check(!titleBounds.IntersectsWith(menuBounds) && Math.Abs(titleBounds.Top + titleBounds.Height / 2 - menuBounds.Top - menuBounds.Height / 2) < 1,
                 "The menu overlaps the recording title or is no longer beside it.");
+            var sizeLabel = Descendants<TextBlock>(card).Single(text => text.Text == model.FileSizeHuman);
+            Rect sizeBounds = sizeLabel.TransformToAncestor(card).TransformBounds(new Rect(sizeLabel.RenderSize));
+            Check(sizeBounds.Top - titleBounds.Bottom >= 8, "The recording size is too close to its title.");
             foreach (var label in Descendants<TextBlock>(card))
                 Check(cardBounds.Contains(label.TransformToAncestor(card).TransformBounds(new Rect(label.RenderSize))),
                     "Recording metadata is clipped by the card.");

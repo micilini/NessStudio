@@ -117,7 +117,7 @@ namespace NessStudio.Components.RecentProjects
             Brush fg = (Brush)new BrushConverter().ConvertFromString("#708089");
 
             const int cardWidth = 225;
-            const int cardHeight = 215;
+            const int cardHeight = 223;
             const int cardPadding = 9;
             const int thumbHeight = 112;
             const int cardMargin = 6;
@@ -138,6 +138,7 @@ namespace NessStudio.Components.RecentProjects
             var root = new Grid();
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(thumbHeight) });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(40) });
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(8) });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(20) });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
@@ -259,7 +260,7 @@ namespace NessStudio.Components.RecentProjects
                 }, TaskScheduler.FromCurrentSynchronizationContext());
             }
 
-            string title = string.IsNullOrWhiteSpace(model.Title) ? "Unknown Title" : model.Title;
+            string title = model.DisplayTitle;
             var titleText = new TextBlock
             {
                 Text = title,
@@ -329,8 +330,8 @@ namespace NessStudio.Components.RecentProjects
             titleGrid.Children.Add(optionsBtn);
 
             Grid.SetRow(titleGrid, 1);
-            Grid.SetRow(sizeText, 2);
-            Grid.SetRow(dateText, 3);
+            Grid.SetRow(sizeText, 3);
+            Grid.SetRow(dateText, 4);
             root.Children.Add(thumbBorder);
             root.Children.Add(titleGrid);
             root.Children.Add(sizeText);

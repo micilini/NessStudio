@@ -36,7 +36,7 @@ namespace NessStudio.View.ExportScreen
         {
             try
             {
-                ProjectTitleText.Text = _project.Title;
+                ProjectTitleText.Text = _project.DisplayTitle;
                 _sessionInfo = ExportService.LoadSessionInfo(_project.ProjectFolderPath);
 
                 ConfigureInitialOptions();

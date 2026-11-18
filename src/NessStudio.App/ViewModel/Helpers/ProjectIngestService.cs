@@ -40,6 +40,7 @@ public static class ProjectIngestService
                 ProjectFilePath=document.AuthorityPath,ThumbnailPath=preview??string.Empty,FileSizeBytes=FolderSize(projectFolder),DurationMs=manifest.DurationMs??0,
                 VideoWidth=track?.Width??0,VideoHeight=track?.Height??0,FrameRate=track?.Fps??0,HasMicrophoneAudio=manifest.HasMic,HasSystemAudio=manifest.HasSystemAudio,HasWebcam=manifest.HasWebcam,
                 CreatedAt=manifest.CreatedAt==default?DateTime.Now:manifest.CreatedAt.LocalDateTime,UpdatedAt=DateTime.Now,LastOpenedAt=DateTime.Now};
+            model.Title = model.DisplayTitle;
             Report("Registering project...",98);var registered=DatabaseHelper.RegisterProject(model);
             if(manifest.Version==3)ProjectManifestStore.RecordRegistration(projectFolder,projectId,true);
             Report("Finishing...",100);return registered;
