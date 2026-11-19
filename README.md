@@ -89,6 +89,14 @@ A recording session may contain one or more of these tracks:
 
 Files depend on the selected sources and recording mode. Native screen and camera tracks use Matroska, and audio tracks use WAV. Audio-only sessions are supported; they do not generate a visual preview.
 
+## Recording quality
+
+Settings → Recording quality controls compression independently of capture resolution. **High quality** is the default; **Balanced** produces a predictable bitrate adjusted to resolution and FPS, and **Maximum** retains more detail with larger files. All four recording modes support these choices. Changing mode does not silently reduce resolution or quality.
+
+Screen recordings preserve the selected monitor or area's physical dimensions up to 1920×1080: a Full HD monitor produces 1920×1080, and a 512×512 region stays 512×512. Odd dimensions are padded to even edges for H.264. The camera uses its best advertised format up to Full HD at the requested cadence and retains its own output size, independently of the screen. Sources above Full HD are proportionally reduced to the current supported output limit.
+
+High/Maximum use H.264 High profile with x264 CRF 18/16, Intel QSV ICQ 18/16 (CQP when ICQ is unavailable), or NVIDIA/AMD CQP 18/16. These values are encoder controls rather than a guarantee of identical pictures across devices. Audio driver timestamp irregularities are recovered on the common sample timeline; small corrections and interruptions entirely inside pauses remain in project diagnostics without a save dialog. Significant recovered silence in the saved audio still produces a notice.
+
 ## Export Options
 
 NessStudio 3.0.0 exports through native media jobs and the pinned FFmpeg runtime, using the project manifest and session timing.

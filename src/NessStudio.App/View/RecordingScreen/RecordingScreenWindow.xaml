@@ -415,6 +415,16 @@
                             </Style>
                         </MenuItem.ItemContainerStyle>
                     </MenuItem>
+                    <MenuItem Header="Recording quality" ItemsSource="{Binding QualityOptions}">
+                        <MenuItem.ItemContainerStyle>
+                            <Style TargetType="{x:Type MenuItem}" BasedOn="{StaticResource SettingsLeafMenuItemStyle}">
+                                <Setter Property="Header" Value="{Binding Label}" />
+                                <Setter Property="Command" Value="{Binding DataContext.SelectQualityOptionCommand, ElementName=RootWindow}" />
+                                <Setter Property="CommandParameter" Value="{Binding Value}" />
+                                <Setter Property="IsChecked" Value="{Binding IsSelected, Mode=TwoWay}" />
+                            </Style>
+                        </MenuItem.ItemContainerStyle>
+                    </MenuItem>
                     <MenuItem Header="FPS">
                         <MenuItem.ItemsSource>
                             <Binding Path="FpsOptions" />

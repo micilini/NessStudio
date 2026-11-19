@@ -278,6 +278,7 @@ namespace NessStudio.ViewModel
                 OnPropertyChanged(nameof(SelectedRecordingFps));
                 OnPropertyChanged(nameof(CurrentSettingsSummary));
                 OnPropertyChanged(nameof(FooterStatusMessage));
+                SelectPreferredCameraFormat();
             }
         }
         private int _selectedRecordingTimerSeconds = 3;
@@ -308,13 +309,29 @@ namespace NessStudio.ViewModel
                 if (_isLoaded) UpdateIdlePreview();
                 OnPropertyChanged(nameof(SelectedExecutionMode)); OnPropertyChanged(nameof(CurrentSettingsSummary));
                 OnPropertyChanged(nameof(FooterStatusMessage));
+                RefreshQualityOptions();
+            }
+        }
+        private RecordingQualityPreset _selectedQualityPreset = RecordingQualityPreset.High;
+        public RecordingQualityPreset SelectedQualityPreset
+        {
+            get => _selectedQualityPreset;
+            set
+            {
+                if (!Enum.IsDefined(value) || !CanChangeRecordingPreferences() || _selectedQualityPreset == value) return;
+                _selectedQualityPreset = value;
+                OnPropertyChanged(nameof(SelectedQualityPreset));
+                OnPropertyChanged(nameof(FooterStatusMessage));
+                OnPropertyChanged(nameof(CurrentSettingsSummary));
+                RefreshRecordingPresetSelections();
             }
         }
         public string CurrentSettingsSummary => $"{SelectedRecordingFps} fps • {SelectedRecordingTimerSeconds}s • {SelectedExecutionMode switch { RecordingExecutionMode.FullSoftware => "CPU", RecordingExecutionMode.RequireGpuResidentHardware => "GPU", RecordingExecutionMode.GpuWithSoftwareEncoding => "GPU + CPU", _ => "Auto" }}";
-        public string FooterStatusMessage => $"Recording mode: {SelectedExecutionMode switch { RecordingExecutionMode.FullSoftware => "CPU", RecordingExecutionMode.RequireGpuResidentHardware => "GPU", RecordingExecutionMode.GpuWithSoftwareEncoding => "GPU + CPU", _ => "Automatic" }} • {SelectedRecordingFps} FPS • {DiskSpaceMessage}" + (_startBusy ? " • Starting recording..." : string.Empty);
+        public string FooterStatusMessage => $"Recording mode: {SelectedExecutionMode switch { RecordingExecutionMode.FullSoftware => "CPU", RecordingExecutionMode.RequireGpuResidentHardware => "GPU", RecordingExecutionMode.GpuWithSoftwareEncoding => "GPU + CPU", _ => "Automatic" }} • {SelectedQualityPreset} quality • {SelectedRecordingFps} FPS • {DiskSpaceMessage}" + (_startBusy ? " • Starting recording..." : string.Empty);
         public ObservableCollection<RecordingPresetOption> FpsOptions { get; } = new();
         public ObservableCollection<RecordingPresetOption> TimerOptions { get; } = new();
         public ObservableCollection<RecordingPresetOption> ExecutionModeOptions { get; } = new();
+        public ObservableCollection<RecordingPresetOption> QualityOptions { get; } = new();
         private string pauseResumeText = "Pause";
         public string PauseResumeText
         {
@@ -367,11 +384,18 @@ namespace NessStudio.ViewModel
             {
                 _selectedWebcam = value; OnPropertyChanged(nameof(SelectedWebcam)); CameraFormats.Clear();
                 if (value is not null) foreach (var format in value.Formats) CameraFormats.Add(format);
-                SelectedCameraFormat = CameraFormats.FirstOrDefault(format => format.Width == 1280 && format.Height == 720 && format.FpsNum == 30 && format.FpsDen == 1) ?? CameraFormats.FirstOrDefault();
+                SelectPreferredCameraFormat();
                 if (_isLoaded) RestartWebcamPreview();
             }
         }
         public ObservableCollection<RecordingCameraOptions> CameraFormats { get; } = new();
+        private void SelectPreferredCameraFormat()
+        {
+            SelectedCameraFormat = CameraFormats.Where(format => format.Width <= 1920 && format.Height <= 1080)
+                .OrderByDescending(format => (long)format.Width * format.Height)
+                .ThenBy(format => Math.Abs((double)format.FpsNum / format.FpsDen - SelectedRecordingFps))
+                .FirstOrDefault() ?? CameraFormats.FirstOrDefault();
+        }
         private RecordingCameraOptions? _selectedCameraFormat;
         public RecordingCameraOptions? SelectedCameraFormat { get => _selectedCameraFormat; set { _selectedCameraFormat=value; OnPropertyChanged(nameof(SelectedCameraFormat)); if (_isLoaded) UpdateWebcamPreviewRunning(); } }
         public MMDevice SelectedMicrophone { get => _selectedMicrophone; set { _selectedMicrophone = value; OnPropertyChanged(nameof(SelectedMicrophone)); UpdateAudioMonitoring(); } }
@@ -452,6 +476,7 @@ namespace NessStudio.ViewModel
         public DelegateCommand SelectFpsOptionCommand { get; set; }
         public DelegateCommand SelectTimerOptionCommand { get; set; }
         public DelegateCommand SelectExecutionModeCommand { get; set; }
+        public DelegateCommand SelectQualityOptionCommand { get; set; }
         private const string DrawAreaLabel = "Draw Area";
         public RecordingScreenWindowVM(RecordingScreenWindow recordingScreen, IRecorderEngineFactory recorderFactory,
             RecordingPreferencesService preferences, NativeRecordingWorkspace previews, Func<string, ulong>? availableSpace = null)
@@ -471,6 +496,7 @@ namespace NessStudio.ViewModel
             SelectFpsOptionCommand = new DelegateCommand(param => SelectFpsOption(param));
             SelectTimerOptionCommand = new DelegateCommand(param => SelectTimerOption(param));
             SelectExecutionModeCommand = new DelegateCommand(param => SelectExecutionMode(param));
+            SelectQualityOptionCommand = new DelegateCommand(param => SelectQualityOption(param));
             RecordingScreenWindow.Loaded += RecordingScreenWindow_Loaded;
             RecordingScreenWindow.Unloaded += RecordingScreenWindow_Unloaded;
             RecordingScreenWindow.Closing += RecordingScreenWindow_Closing;
@@ -589,6 +615,7 @@ namespace NessStudio.ViewModel
         {
             BuildRecordingPresetCollections();
             LoadRecordingPreferencesFromApp();
+            RefreshQualityOptions();
             RefreshRecordingPresetSelections();
         }
         private void BuildRecordingPresetCollections()
@@ -621,6 +648,9 @@ namespace NessStudio.ViewModel
             SelectedRecordingTimerSeconds = RecordingPreferencesService.NormalizeTimer(app.RecordingTimerSeconds);
             SelectedRecordingFps = RecordingPreferencesService.NormalizeFps(app.RecordingFps);
             SelectedExecutionMode = app.RecordingExecutionMode;
+            _selectedQualityPreset = levels.QualityPreset;
+            OnPropertyChanged(nameof(SelectedQualityPreset));
+            OnPropertyChanged(nameof(FooterStatusMessage));
         }
         private void RefreshRecordingPresetSelections()
         {
@@ -630,6 +660,8 @@ namespace NessStudio.ViewModel
                 option.IsSelected = option.Value == SelectedRecordingTimerSeconds;
             foreach (var option in ExecutionModeOptions)
                 option.IsSelected = option.Value == (int)SelectedExecutionMode;
+            foreach (var option in QualityOptions)
+                option.IsSelected = option.Value == (int)SelectedQualityPreset;
             OnPropertyChanged(nameof(CurrentSettingsSummary));
         }
         private bool CanChangeRecordingPreferences()
@@ -719,6 +751,7 @@ namespace NessStudio.ViewModel
             current.RecordingFps = SelectedRecordingFps;
             current.TimerSeconds = SelectedRecordingTimerSeconds;
             current.ExecutionMode = SelectedExecutionMode;
+            current.QualityPreset = SelectedQualityPreset;
             current.MicrophoneLevel = MicrophoneLevel;
             current.SystemAudioLevel = SystemAudioLevel;
             service.Save(current);
@@ -737,6 +770,19 @@ namespace NessStudio.ViewModel
                 RecordingFps = SelectedRecordingFps,
                 CountdownSeconds = SelectedRecordingTimerSeconds
             };
+        }
+        private void RefreshQualityOptions()
+        {
+            QualityOptions.Clear();
+            foreach (var quality in Enum.GetValues<RecordingQualityPreset>())
+                QualityOptions.Add(new RecordingPresetOption { Label = RecordingQualityPresets.Label(quality), Value = (int)quality,
+                    IsSelected = quality == SelectedQualityPreset });
+        }
+        private void SelectQualityOption(object parameter)
+        {
+            if (!CanChangeRecordingPreferences() || parameter is not int quality || !Enum.IsDefined((RecordingQualityPreset)quality)) return;
+            SelectedQualityPreset = (RecordingQualityPreset)quality;
+            SaveRecordingPreferencesToDisk(); CloseSettingsMenus();
         }
         private async void RecordingScreenWindow_Unloaded(object sender, RoutedEventArgs e)
         {
@@ -1287,7 +1333,7 @@ namespace NessStudio.ViewModel
                 if (_isClosing) return;
                 _rec = _recorderFactory.Create(new RecordingRequest(outDir, targets, LegacyGeometry.Describe(crop), runtimeOptions,
                     SelectedExecutionMode, Camera: IsWebcamEnabled ? SelectedCameraFormat : null)
-                    { MicrophoneGain = (float)(MicrophoneLevel / 100), SystemAudioGain = (float)(SystemAudioLevel / 100) });
+                    { MicrophoneGain = (float)(MicrophoneLevel / 100), SystemAudioGain = (float)(SystemAudioLevel / 100), QualityPreset = SelectedQualityPreset });
                 _previews.Adopt(_rec);
                 _rec.StateChanged += RecordingService_StateChanged;
 

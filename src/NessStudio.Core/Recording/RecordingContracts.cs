@@ -22,6 +22,8 @@ public sealed record RecordingRequest(string OutputDirectory, RecordingTargets T
     public float MicrophoneGain { get; init; } = 1;
     /// <summary>Gets the loopback recording gain without changing Windows playback volume.</summary>
     public float SystemAudioGain { get; init; } = 1;
+    /// <summary>Gets an optional UI preset. Null preserves explicit/legacy video configuration.</summary>
+    public RecordingQualityPreset? QualityPreset { get; init; }
 }
 
 /// <summary>Identifies the exact advertised input format independently of the encoded output.</summary>

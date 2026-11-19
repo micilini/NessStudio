@@ -126,9 +126,9 @@ Plan plan(const Json &request) {
     const auto options = request.value("output", Json::object());
     keys(options, {"width", "height", "fpsNum", "fpsDen", "slots"});
     output.width = static_cast<uint32_t>(number(
-        options, "width", result.camera->width, output.gpu ? 1920 : 1280));
+        options, "width", result.camera->width, 1920));
     output.height = static_cast<uint32_t>(number(
-        options, "height", result.camera->height, output.gpu ? 1080 : 720));
+        options, "height", result.camera->height, 1080));
     if (!output.width || !output.height || output.width & 1 ||
         output.height & 1)
       reject(NSS_E_ARGUMENT, NSS_STAGE_PLAN,
@@ -157,7 +157,7 @@ Plan plan(const Json &request) {
       if(display!=list.end()) output.display = *display;
       else {
         output.gpu=false;
-        if(output.width>1280 || output.height>720)
+        if(output.width>1920 || output.height>1080)
           reject(NSS_E_UNAVAILABLE,NSS_STAGE_PLAN,
             "Auto camera cannot preserve this geometry without a GPU adapter");
       }
@@ -171,7 +171,7 @@ Plan plan(const Json &request) {
              "Desktop Duplication qualification requires an explicit execution mode");
   }
   const auto &enc = request.at("encoder");
-  keys(enc, {"backend", "bitrateBps", "profile", "maxPendingFrames",
+  keys(enc, {"backend", "bitrateBps", "profile", "quality", "maxPendingFrames",
              "maxPacketBytes"});
   const auto backend = enc.at("backend").get<std::string>();
   result.requested_backend=backend;
@@ -208,12 +208,16 @@ Plan plan(const Json &request) {
   if (c.bitrate_bps < 10000)
     reject(NSS_E_ARGUMENT, NSS_STAGE_PLAN,
            "Encoder bitrate is below its minimum");
-  c.profile = static_cast<uint32_t>(number(enc, "profile", 66, 100));
-  if (c.profile != 66)
+  const auto quality = enc.value("quality", std::string("Balanced"));
+  if (quality != "Balanced" && quality != "High" && quality != "Maximum")
+    reject(NSS_E_ARGUMENT, NSS_STAGE_PLAN, "Unknown recording quality");
+  const bool high_quality = quality != "Balanced";
+  c.profile = static_cast<uint32_t>(number(enc, "profile", high_quality ? 100 : 66, 100));
+  if (c.profile != 66 && c.profile != 100)
     reject(NSS_E_UNAVAILABLE, NSS_STAGE_PLAN,
-           "Only explicit H264 baseline with zero B frames is qualified");
+           "H264 recording requires Baseline or High profile with zero B frames");
   c.color = NESS_V2_BT709_LIMITED;
-  c.rate_control = NESS_V2_CBR;
+  c.rate_control = quality == "Maximum" ? NESS_V2_QUALITY_MAXIMUM : high_quality ? NESS_V2_QUALITY_HIGH : NESS_V2_CBR;
   c.max_pending_frames =
       static_cast<uint32_t>(number(enc, "maxPendingFrames", 16, 64));
   c.max_packet_bytes =
@@ -1216,9 +1220,9 @@ public:
         if(!plan_.automatic_route || source_factory_ ||
            (failure.code!=NSS_E_UNAVAILABLE && failure.code!=NSS_E_TIMEOUT))
           reject(failure.code,failure.stage,failure.message.c_str(),failure.hresult);
-        if(plan_.capture.width>1280 || plan_.capture.height>720)
+        if(plan_.capture.width>1920 || plan_.capture.height>1080)
           reject(NSS_E_UNAVAILABLE,NSS_STAGE_PLAN,
-            "Auto cannot preserve this geometry within the FullSoftware 1280x720 budget");
+            "Auto cannot preserve this geometry within the FullSoftware 1920x1080 budget");
         selection_.push_back({{"kind","capture"},{"route","GPU"},{"accepted",false},
           {"code",failure.code},{"nativeCode",failure.hresult},{"reason",failure.message}});
         first.reset();
@@ -1278,6 +1282,11 @@ public:
       encoder_info_["fpsDen"] = plan_.encoder.fps_den;
       encoder_info_["bitrateBps"] = plan_.encoder.bitrate_bps;
       encoder_info_["profile"] = plan_.encoder.profile;
+      encoder_info_["quality"] = plan_.encoder.rate_control == NESS_V2_QUALITY_MAXIMUM ? "Maximum" :
+          plan_.encoder.rate_control == NESS_V2_QUALITY_HIGH ? "High" : "Balanced";
+      encoder_info_["rateControl"] = plan_.encoder.rate_control == NESS_V2_CBR ? "CBR" : "Quality-based";
+      if (plan_.encoder.rate_control != NESS_V2_CBR)
+        encoder_info_["qualityLevel"] = plan_.encoder.rate_control == NESS_V2_QUALITY_MAXIMUM ? 16 : 18;
       encoder_info_["color"] = "BT709 limited SDR";
       encoder_info_["maxBFrames"] = 0;
       if (stop.stop_requested())

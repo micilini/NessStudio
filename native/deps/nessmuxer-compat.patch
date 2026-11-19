@@ -138,8 +138,87 @@ index 0000000000000000000000000000000000000000..e0c3ca7679fa9bca75c134f8e0c9ee63
 +  Stats stats() const { std::lock_guard lock(mutex_); return stats_; }
 +};
 +} // namespace nessmuxer::io
+diff --git a/include/ness_muxer_v2.h b/include/ness_muxer_v2.h
+index d9cd206a8d06a56b82fa332f5c27582cd0e6c55b..9e0ad0807f743683658f0d344b789f90019bc5c2 100644
+--- a/include/ness_muxer_v2.h
++++ b/include/ness_muxer_v2.h
+@@ -47,6 +47,8 @@ extern "C" {
+ #define NESS_V2_PROFILE_MAIN 77u
+ #define NESS_V2_PROFILE_HIGH 100u
+ #define NESS_V2_CBR 0u
++#define NESS_V2_QUALITY_HIGH 1u
++#define NESS_V2_QUALITY_MAXIMUM 2u
+ #define NESS_V2_BT709_LIMITED 1u
+ 
+ typedef struct ness_encoder_v2 ness_encoder_v2;
+diff --git a/src/v2/amf.cpp b/src/v2/amf.cpp
+index 7822a249978b3cff993ed5585b88aace9f731b46..1ccca87cd5452572e3da73f8207f69ccea28219f 100644
+--- a/src/v2/amf.cpp
++++ b/src/v2/amf.cpp
+@@ -112,18 +112,24 @@ class Amf final : public Encoder {
+   }
+   void initialize() {
+     set(AMF_VIDEO_ENCODER_USAGE,static_cast<amf_int64>(AMF_VIDEO_ENCODER_USAGE_LOW_LATENCY));
+-    set(AMF_VIDEO_ENCODER_PROFILE,static_cast<amf_int64>(AMF_VIDEO_ENCODER_PROFILE_BASELINE));
+-    set(AMF_VIDEO_ENCODER_QUALITY_PRESET,static_cast<amf_int64>(AMF_VIDEO_ENCODER_QUALITY_PRESET_BALANCED));
++    set(AMF_VIDEO_ENCODER_PROFILE,static_cast<amf_int64>(config_.profile));
++    set(AMF_VIDEO_ENCODER_QUALITY_PRESET,static_cast<amf_int64>(config_.rate_control==NESS_V2_CBR?
++      AMF_VIDEO_ENCODER_QUALITY_PRESET_BALANCED:AMF_VIDEO_ENCODER_QUALITY_PRESET_QUALITY));
+     set(AMF_VIDEO_ENCODER_FRAMESIZE,AMFConstructSize(static_cast<amf_int32>(config_.width),static_cast<amf_int32>(config_.height)));
+     set(AMF_VIDEO_ENCODER_FRAMERATE,AMFConstructRate(config_.fps_num,config_.fps_den));
+-    set(AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD,static_cast<amf_int64>(AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_CBR));
++    const auto rate_control=config_.rate_control==NESS_V2_CBR?AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_CBR:AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_CONSTANT_QP;
++    set(AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD,static_cast<amf_int64>(rate_control));
++    if(config_.rate_control!=NESS_V2_CBR) {
++      const amf_int64 qp=config_.rate_control==NESS_V2_QUALITY_MAXIMUM?16:18;
++      set(AMF_VIDEO_ENCODER_QP_I,qp); set(AMF_VIDEO_ENCODER_QP_P,qp); set(AMF_VIDEO_ENCODER_QP_B,qp);
++    }
+     set(AMF_VIDEO_ENCODER_TARGET_BITRATE,static_cast<amf_int64>(config_.bitrate_bps));
+     set(AMF_VIDEO_ENCODER_PEAK_BITRATE,static_cast<amf_int64>(config_.bitrate_bps));
+     set(AMF_VIDEO_ENCODER_VBV_BUFFER_SIZE,static_cast<amf_int64>(config_.bitrate_bps));
+     set(AMF_VIDEO_ENCODER_B_PIC_PATTERN,amf_int64{0});
+     set(AMF_VIDEO_ENCODER_IDR_PERIOD,static_cast<amf_int64>((std::max)(uint64_t{1},uint64_t(config_.fps_num)*2/config_.fps_den)));
+     set(AMF_VIDEO_ENCODER_RATE_CONTROL_SKIP_FRAME_ENABLE,false);
+-    set(AMF_VIDEO_ENCODER_FILLER_DATA_ENABLE,true);
++    set(AMF_VIDEO_ENCODER_FILLER_DATA_ENABLE,config_.rate_control==NESS_V2_CBR);
+     set(AMF_VIDEO_ENCODER_FULL_RANGE_COLOR,false);
+     set(AMF_VIDEO_ENCODER_INPUT_COLOR_PROFILE,static_cast<amf_int64>(AMF_VIDEO_CONVERTER_COLOR_PROFILE_709));
+     set(AMF_VIDEO_ENCODER_OUTPUT_COLOR_PROFILE,static_cast<amf_int64>(AMF_VIDEO_CONVERTER_COLOR_PROFILE_709));
+@@ -140,7 +146,7 @@ class Amf final : public Encoder {
+     amf_checked(runtime_.encoder->GetProperty(AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD,&rate),"AMD AMF rate-control confirmation failed",1);
+     amf_checked(runtime_.encoder->GetProperty(AMF_VIDEO_ENCODER_FRAMESIZE,&size),"AMD AMF geometry confirmation failed",1);
+     amf_checked(runtime_.encoder->GetProperty(AMF_VIDEO_ENCODER_FRAMERATE,&fps),"AMD AMF frame-rate confirmation failed",1);
+-    if(b_frames || profile!=config_.profile || rate!=AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_CBR ||
++    if(b_frames || profile!=config_.profile || rate!=rate_control ||
+        size.width!=static_cast<amf_int32>(config_.width) || size.height!=static_cast<amf_int32>(config_.height) ||
+        fps.num!=config_.fps_num || fps.den!=config_.fps_den)
+       fail(NESS_V2_E_UNAVAILABLE,1,"AMD AMF changed the negotiated stream contract");
+diff --git a/src/v2/api.cpp b/src/v2/api.cpp
+index 4b148315309b6a001c1b8ca7e82de0eafe723309..b8fb955bb6e66d3e416690bcdc54ff593e5f736a 100644
+--- a/src/v2/api.cpp
++++ b/src/v2/api.cpp
+@@ -28,6 +28,9 @@ int32_t ness_encoder_create_gpu_v2(const ness_encoder_config_v2 *c,
+     common.backend = NESS_V2_BACKEND_MF_SOFTWARE;
+     common.policy = NESS_V2_POLICY_SOFTWARE;
+     ness2::configure(common);
++    if(config.backend==NESS_V2_BACKEND_MF_D3D11 &&
++       (config.rate_control!=NESS_V2_CBR || config.profile!=NESS_V2_PROFILE_BASELINE))
++      ness2::fail(NESS_V2_E_UNAVAILABLE,1,"Media Foundation quality recording is unavailable; select a native encoder");
+     std::unique_ptr<ness2::Encoder> encoder;
+     switch (config.backend) {
+     case NESS_V2_BACKEND_QSV_D3D11: encoder=ness2::qsv_encoder(config,*target); break;
+@@ -64,6 +67,9 @@ int32_t ness_encoder_create_v2(const ness_encoder_config_v2 *c,
+     if (!config.max_packet_bytes)
+       config.max_packet_bytes = 16 * 1024 * 1024;
+     ness2::configure(config);
++    if(config.backend==NESS_V2_BACKEND_MF_SOFTWARE &&
++       (config.rate_control!=NESS_V2_CBR || config.profile!=NESS_V2_PROFILE_BASELINE))
++      ness2::fail(NESS_V2_E_UNAVAILABLE,1,"Media Foundation quality recording is unavailable; select x264");
+     *out = new ness_encoder_v2(config.backend == NESS_V2_BACKEND_X264
+         ? ness2::x264_encoder(config) : ness2::mf_encoder(config));
+     return 0;
 diff --git a/src/v2/core.cpp b/src/v2/core.cpp
-index b2935f66ba96ffbd819d3373e9344a1b996bc6d0..71b3dc6d867ead358a1f3b7d5f9bca5be5087734 100644
+index b2935f66ba96ffbd819d3373e9344a1b996bc6d0..11587727fb01287fbff8bb5d84ae063c59083f06 100644
 --- a/src/v2/core.cpp
 +++ b/src/v2/core.cpp
 @@ -1,4 +1,5 @@
@@ -148,7 +227,17 @@ index b2935f66ba96ffbd819d3373e9344a1b996bc6d0..71b3dc6d867ead358a1f3b7d5f9bca5b
  #include <algorithm>
  #include <bit>
  #include <filesystem>
-@@ -225,6 +226,8 @@ void PacketCollector::discard() noexcept {
+@@ -149,7 +150,8 @@ void configure(const ness_encoder_config_v2 &c) {
+         !c.max_pending_frames || c.max_pending_frames > 64 || !c.max_packet_bytes ||
+         c.max_packet_bytes > 16 * 1024 * 1024)
+         fail(-3, 1, "Invalid encoder dimensions/rate/bitrate/queue budget");
+-    if (c.rate_control != NESS_V2_CBR || c.profile != NESS_V2_PROFILE_BASELINE ||
++    if (c.rate_control > NESS_V2_QUALITY_MAXIMUM ||
++        (c.profile != NESS_V2_PROFILE_BASELINE && c.profile != NESS_V2_PROFILE_HIGH) ||
+         c.color != NESS_V2_BT709_LIMITED || c.max_b_frames)
+         fail(NESS_V2_E_UNAVAILABLE, 1, "Unqualified rate control/profile/color/B-frame configuration");
+ }
+@@ -225,6 +227,8 @@ void PacketCollector::discard() noexcept {
  class FileSink final : public Sink {
  #ifdef _WIN32
      HANDLE handle_{INVALID_HANDLE_VALUE};
@@ -157,7 +246,7 @@ index b2935f66ba96ffbd819d3373e9344a1b996bc6d0..71b3dc6d867ead358a1f3b7d5f9bca5b
      static void checked(bool ok, const char *operation) {
          if (!ok)
              fail(-2, 4, operation, static_cast<int32_t>(HRESULT_FROM_WIN32(GetLastError())));
-@@ -248,39 +251,49 @@ class FileSink final : public Sink {
+@@ -248,39 +252,49 @@ class FileSink final : public Sink {
          handle_ = CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, nullptr,
                                CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
          checked(handle_ != INVALID_HANDLE_VALUE, "Cannot create new output file");
@@ -224,7 +313,7 @@ index b2935f66ba96ffbd819d3373e9344a1b996bc6d0..71b3dc6d867ead358a1f3b7d5f9bca5b
  #else
      FILE *file_{};
 diff --git a/src/v2/nvenc.cpp b/src/v2/nvenc.cpp
-index b95594ba0b998e997738921b36c36b7d22909520..5af22f3de0a2acdf7a06de2a89f3f131957adc59 100644
+index b95594ba0b998e997738921b36c36b7d22909520..4e56daf0c019900e93cf3ab24c2147da3114ee37 100644
 --- a/src/v2/nvenc.cpp
 +++ b/src/v2/nvenc.cpp
 @@ -43,7 +43,12 @@ struct Runtime {
@@ -241,8 +330,65 @@ index b95594ba0b998e997738921b36c36b7d22909520..5af22f3de0a2acdf7a06de2a89f3f131
      api.version=NV_ENCODE_API_FUNCTION_LIST_VER;
      nv_checked(create(&api),"NVENC function table creation failed",1);
      if(!api.nvEncOpenEncodeSessionEx || !api.nvEncGetEncodeGUIDCount || !api.nvEncGetEncodeGUIDs ||
+@@ -113,8 +118,9 @@ class Nvenc final : public Encoder {
+     if(!count || count>64) fail(NESS_V2_E_UNAVAILABLE,1,"NVENC has no bounded H.264 profile list");
+     std::vector<GUID> profiles(count);
+     nv_checked(r.api.nvEncGetEncodeProfileGUIDs(r.session,NV_ENC_CODEC_H264_GUID,profiles.data(),count,&actual),"NVENC profile list unavailable",1);
+-    if(actual>count || std::none_of(profiles.begin(),profiles.begin()+actual,[](const GUID &id){return id==NV_ENC_H264_PROFILE_BASELINE_GUID;}))
+-      fail(NESS_V2_E_UNAVAILABLE,1,"Selected NVENC hardware does not support H.264 Baseline");
++    const auto &profile=config_.profile==NESS_V2_PROFILE_HIGH?NV_ENC_H264_PROFILE_HIGH_GUID:NV_ENC_H264_PROFILE_BASELINE_GUID;
++    if(actual>count || std::none_of(profiles.begin(),profiles.begin()+actual,[&](const GUID &id){return id==profile;}))
++      fail(NESS_V2_E_UNAVAILABLE,1,"Selected NVENC hardware does not support the requested H.264 profile");
+     nv_checked(r.api.nvEncGetInputFormatCount(r.session,NV_ENC_CODEC_H264_GUID,&count),"NVENC input format count unavailable",1);
+     if(!count || count>128) fail(NESS_V2_E_UNAVAILABLE,1,"NVENC has no bounded input format list");
+     std::vector<NV_ENC_BUFFER_FORMAT> formats(count);
+@@ -124,17 +130,19 @@ class Nvenc final : public Encoder {
+     const auto width=r.capability(NV_ENC_CAPS_WIDTH_MAX),height=r.capability(NV_ENC_CAPS_HEIGHT_MAX);
+     if(width<=0 || height<=0 || config_.width>static_cast<uint32_t>(width) || config_.height>static_cast<uint32_t>(height) ||
+        !r.capability(NV_ENC_CAPS_ASYNC_ENCODE_SUPPORT) ||
+-       !(r.capability(NV_ENC_CAPS_SUPPORTED_RATECONTROL_MODES)&NV_ENC_PARAMS_RC_CBR))
++       (config_.rate_control==NESS_V2_CBR && !(r.capability(NV_ENC_CAPS_SUPPORTED_RATECONTROL_MODES)&NV_ENC_PARAMS_RC_CBR)))
+       fail(NESS_V2_E_UNAVAILABLE,1,"NVENC hardware cannot satisfy dimensions, asynchronous operation or CBR");
+   }
+   void initialize() {
+     auto &r=runtime_;
+     NV_ENC_PRESET_CONFIG preset{};
+     preset.version=NV_ENC_PRESET_CONFIG_VER; preset.presetCfg.version=NV_ENC_CONFIG_VER;
+-    nv_checked(r.api.nvEncGetEncodePresetConfigEx(r.session,NV_ENC_CODEC_H264_GUID,NV_ENC_PRESET_P4_GUID,
+-      NV_ENC_TUNING_INFO_LOW_LATENCY,&preset),"NVENC P4 low-latency preset unavailable",1);
++    const auto &preset_id=config_.rate_control==NESS_V2_CBR?NV_ENC_PRESET_P4_GUID:NV_ENC_PRESET_P5_GUID;
++    const auto tuning=config_.rate_control==NESS_V2_CBR?NV_ENC_TUNING_INFO_LOW_LATENCY:NV_ENC_TUNING_INFO_HIGH_QUALITY;
++    nv_checked(r.api.nvEncGetEncodePresetConfigEx(r.session,NV_ENC_CODEC_H264_GUID,preset_id,
++      tuning,&preset),"NVENC requested recording preset unavailable",1);
+     auto configuration=preset.presetCfg;
+-    configuration.profileGUID=NV_ENC_H264_PROFILE_BASELINE_GUID;
++    configuration.profileGUID=config_.profile==NESS_V2_PROFILE_HIGH?NV_ENC_H264_PROFILE_HIGH_GUID:NV_ENC_H264_PROFILE_BASELINE_GUID;
+     configuration.gopLength=(std::max)(1u,static_cast<uint32_t>(uint64_t(config_.fps_num)*2/config_.fps_den));
+     configuration.frameIntervalP=1; configuration.frameFieldMode=NV_ENC_PARAMS_FRAME_FIELD_MODE_FRAME;
+     auto &rc=configuration.rcParams;
+@@ -142,6 +150,11 @@ class Nvenc final : public Encoder {
+     rc.vbvBufferSize=rc.vbvInitialDelay=config_.bitrate_bps;
+     rc.enableLookahead=0; rc.lookaheadDepth=0; rc.enableAQ=0; rc.enableTemporalAQ=0;
+     rc.multiPass=NV_ENC_MULTI_PASS_DISABLED;
++    if(config_.rate_control!=NESS_V2_CBR) {
++      rc.rateControlMode=NV_ENC_PARAMS_RC_CONSTQP;
++      rc.averageBitRate=rc.maxBitRate=rc.vbvBufferSize=rc.vbvInitialDelay=0;
++      rc.constQP.qpIntra=rc.constQP.qpInterP=rc.constQP.qpInterB=config_.rate_control==NESS_V2_QUALITY_MAXIMUM?16:18;
++    }
+     auto &h264=configuration.encodeCodecConfig.h264Config;
+     h264.idrPeriod=configuration.gopLength; h264.repeatSPSPPS=1; h264.disableSPSPPS=0;
+     h264.maxNumRefFrames=1; h264.chromaFormatIDC=1;
+@@ -153,7 +166,7 @@ class Nvenc final : public Encoder {
+     vui.transferCharacteristics=NV_ENC_VUI_TRANSFER_CHARACTERISTIC_BT709; vui.colourMatrix=NV_ENC_VUI_MATRIX_COEFFS_BT709;
+     NV_ENC_INITIALIZE_PARAMS init{};
+     init.version=NV_ENC_INITIALIZE_PARAMS_VER; init.encodeGUID=NV_ENC_CODEC_H264_GUID;
+-    init.presetGUID=NV_ENC_PRESET_P4_GUID; init.tuningInfo=NV_ENC_TUNING_INFO_LOW_LATENCY;
++    init.presetGUID=preset_id; init.tuningInfo=tuning;
+     init.encodeWidth=init.darWidth=init.maxEncodeWidth=config_.width;
+     init.encodeHeight=init.darHeight=init.maxEncodeHeight=config_.height;
+     init.frameRateNum=config_.fps_num; init.frameRateDen=config_.fps_den;
 diff --git a/src/v2/qsv.cpp b/src/v2/qsv.cpp
-index 8256e4e463952f9879d8bb0520b91589a0ba2b0d..9e5ffd33940d80e251d9514b063edfb8e29f59af 100644
+index 8256e4e463952f9879d8bb0520b91589a0ba2b0d..866a275018fb924d9510270a3a2bfcb764492332 100644
 --- a/src/v2/qsv.cpp
 +++ b/src/v2/qsv.cpp
 @@ -20,8 +20,14 @@ using Microsoft::WRL::ComPtr;
@@ -295,7 +441,59 @@ index 8256e4e463952f9879d8bb0520b91589a0ba2b0d..9e5ffd33940d80e251d9514b063edfb8
        if(driver_.value) break;
      }
      if(!driver_.value) fail(NESS_V2_E_UNAVAILABLE,1,"No direct QSV runtime matches the selected adapter LUID");
-@@ -222,11 +231,11 @@ class Qsv final : public Encoder {
+@@ -186,7 +195,7 @@ class Qsv final : public Encoder {
+     parameters.AsyncDepth=static_cast<mfxU16>((std::min)(2u,config_.max_pending_frames));
+     parameters.IOPattern=MFX_IOPATTERN_IN_VIDEO_MEMORY;
+     auto &codec=parameters.mfx;
+-    codec.CodecId=MFX_CODEC_AVC; codec.CodecProfile=MFX_PROFILE_AVC_BASELINE;
++    codec.CodecId=MFX_CODEC_AVC; codec.CodecProfile=static_cast<mfxU16>(config_.profile);
+     codec.TargetUsage=MFX_TARGETUSAGE_BALANCED; codec.RateControlMethod=MFX_RATECONTROL_CBR;
+     codec.TargetKbps=static_cast<mfxU16>((uint64_t(config_.bitrate_bps)+500)/1000);
+     // mfxU16 bitrate fields use a shared scale above 65535 Kbps.
+@@ -196,6 +205,12 @@ class Qsv final : public Encoder {
+     }
+     codec.GopPicSize=static_cast<mfxU16>((std::max)(1u,2*config_.fps_num/config_.fps_den));
+     codec.GopRefDist=1; codec.NumRefFrame=1;
++    if(config_.rate_control!=NESS_V2_CBR) {
++      codec.RateControlMethod=MFX_RATECONTROL_ICQ;
++      codec.TargetKbps=0; codec.BRCParamMultiplier=0;
++      // TargetKbps and ICQQuality share a union in the oneVPL ABI.
++      codec.ICQQuality=config_.rate_control==NESS_V2_QUALITY_MAXIMUM?16:18;
++    }
+     auto &frame=codec.FrameInfo;
+     frame.FourCC=MFX_FOURCC_NV12; frame.ChromaFormat=MFX_CHROMAFORMAT_YUV420;
+     frame.PicStruct=MFX_PICSTRUCT_PROGRESSIVE;
+@@ -208,6 +223,20 @@ class Qsv final : public Encoder {
+     color.VideoFormat=5; color.VideoFullRange=0; color.ColourDescriptionPresent=1;
+     color.ColourPrimaries=color.TransferCharacteristics=color.MatrixCoefficients=1;
+     mfxExtBuffer *extensions[]{&color.Header}; parameters.ExtParam=extensions; parameters.NumExtParam=1;
++    if(config_.rate_control!=NESS_V2_CBR) {
++      auto quality_query=parameters;
++      const auto result=MFXVideoENCODE_Query(driver_.value,&parameters,&quality_query);
++      // Retry only an unavailable quality configuration. Device and memory
++      // failures must retain their original cause instead of trying CQP.
++      if(result<0 && result!=MFX_ERR_UNSUPPORTED && result!=MFX_ERR_NOT_FOUND &&
++         result!=MFX_ERR_NOT_IMPLEMENTED && result!=MFX_ERR_INVALID_VIDEO_PARAM &&
++         result!=MFX_ERR_INCOMPATIBLE_VIDEO_PARAM)
++        checked_mfx(result,"Intel QSV quality capability query failed",NESS_V2_STAGE_CONFIG);
++      if(result<0 || result==MFX_WRN_PARTIAL_ACCELERATION || quality_query.mfx.RateControlMethod!=MFX_RATECONTROL_ICQ) {
++        codec.RateControlMethod=MFX_RATECONTROL_CQP;
++        codec.QPI=codec.QPP=codec.QPB=config_.rate_control==NESS_V2_QUALITY_MAXIMUM?16:18;
++      }
++    }
+     // Prefer the public fixed-function low-power path only when Query confirms
+     // this exact device/configuration supports it. Older hardware retains the
+     // normal direct QSV path; strict GPU selection never falls back to MF/CPU.
+@@ -216,20 +245,26 @@ class Qsv final : public Encoder {
+     auto low_power_checked=low_power;
+     const auto low_power_status=MFXVideoENCODE_Query(driver_.value,&low_power,&low_power_checked);
+     if(low_power_status>=0 && low_power_status!=MFX_WRN_PARTIAL_ACCELERATION &&
+-       low_power_checked.mfx.LowPower==MFX_CODINGOPTION_ON)
++       low_power_checked.mfx.LowPower==MFX_CODINGOPTION_ON &&
++       low_power_checked.mfx.RateControlMethod==parameters.mfx.RateControlMethod &&
++       low_power_checked.mfx.CodecProfile==parameters.mfx.CodecProfile)
+       parameters.mfx.LowPower=MFX_CODINGOPTION_ON;
+     auto queried=parameters;
      const auto query=MFXVideoENCODE_Query(driver_.value,&parameters,&queried);
      if(query==MFX_WRN_PARTIAL_ACCELERATION)
        fail(NESS_V2_E_UNAVAILABLE,1,"Direct QSV configuration requires partial software acceleration");
@@ -309,3 +507,59 @@ index 8256e4e463952f9879d8bb0520b91589a0ba2b0d..9e5ffd33940d80e251d9514b063edfb8
      driver_.encoder_open=true;
      auto effective=parameters;
      checked_mfx(MFXVideoENCODE_GetVideoParam(driver_.value,&effective),"Direct QSV effective parameters unavailable");
++    if(config_.rate_control!=NESS_V2_CBR &&
++       (effective.mfx.RateControlMethod==MFX_RATECONTROL_ICQ ? effective.mfx.ICQQuality!=parameters.mfx.ICQQuality :
++        effective.mfx.QPI!=parameters.mfx.QPI || effective.mfx.QPP!=parameters.mfx.QPP))
++      fail(NESS_V2_E_UNAVAILABLE,1,"Intel QSV changed the requested recording quality");
+     mfxVersion api_version{};
+     checked_mfx(MFXQueryVersion(driver_.value,&api_version),"Direct QSV runtime version unavailable");
+     const auto identity=std::string("Intel QSV / oneVPL ")+std::to_string(api_version.Major)+"."+
+@@ -239,10 +274,10 @@ class Qsv final : public Encoder {
+     std::memset(gpu_.implementation_utf8,0,sizeof(gpu_.implementation_utf8));
+     std::memcpy(gpu_.implementation_utf8,identity.data(),(std::min)(identity.size(),sizeof(gpu_.implementation_utf8)-1));
+     if(!effective.AsyncDepth || effective.AsyncDepth>parameters.AsyncDepth ||
+-       effective.mfx.CodecProfile!=MFX_PROFILE_AVC_BASELINE || effective.mfx.GopRefDist!=1 ||
++       effective.mfx.CodecProfile!=config_.profile || effective.mfx.GopRefDist!=1 ||
+        effective.mfx.FrameInfo.CropW!=config_.width || effective.mfx.FrameInfo.CropH!=config_.height ||
+        effective.mfx.FrameInfo.FrameRateExtN!=config_.fps_num || effective.mfx.FrameInfo.FrameRateExtD!=config_.fps_den ||
+-       effective.mfx.RateControlMethod!=MFX_RATECONTROL_CBR)
++       effective.mfx.RateControlMethod!=parameters.mfx.RateControlMethod)
+       fail(NESS_V2_E_UNAVAILABLE,1,"Direct QSV changed the negotiated stream contract");
+     const auto scale=(std::max)(uint64_t{1},uint64_t(effective.mfx.BRCParamMultiplier));
+     const auto capacity=(std::max)(uint64_t{1024*1024},uint64_t(effective.mfx.BufferSizeInKB)*scale*1000);
+diff --git a/src/v2/x264.cpp b/src/v2/x264.cpp
+index 80472b209ad7877a726e80d69b044f40bd256c1c..2c0cd6aa3f571a975673fb925425b6c70e5dcc0f 100644
+--- a/src/v2/x264.cpp
++++ b/src/v2/x264.cpp
+@@ -263,12 +263,19 @@ public:
+     parameters.rc.i_vbv_buffer_size = parameters.rc.i_bitrate;
+     parameters.rc.b_filler = 1;
+     parameters.i_nal_hrd = X264_NAL_HRD_CBR;
++    if (config_.rate_control != NESS_V2_CBR) {
++      parameters.rc.i_rc_method = X264_RC_CRF;
++      parameters.rc.f_rf_constant = config_.rate_control == NESS_V2_QUALITY_MAXIMUM ? 16.f : 18.f;
++      parameters.rc.i_vbv_max_bitrate = parameters.rc.i_vbv_buffer_size = 0;
++      parameters.rc.b_filler = 0;
++      parameters.i_nal_hrd = X264_NAL_HRD_NONE;
++    }
+     parameters.b_annexb = 1;
+     parameters.b_repeat_headers = 0;
+     parameters.vui.b_fullrange = 0;
+     parameters.vui.i_colorprim = parameters.vui.i_transfer = parameters.vui.i_colmatrix = 1;
+-    if (api_.profile(&parameters,"baseline") < 0)
+-      fail(NESS_V2_E_UNAVAILABLE,1,"x264 baseline profile unavailable");
++    if (api_.profile(&parameters,config_.profile == NESS_V2_PROFILE_HIGH ? "high" : "baseline") < 0)
++      fail(NESS_V2_E_UNAVAILABLE,1,"x264 requested profile unavailable");
+     encoder_ = api_.open(&parameters);
+     if (!encoder_) fail(NESS_V2_E_ENCODER,2,"Cannot initialize pinned x264 software encoder");
+     try {
+@@ -278,6 +285,9 @@ public:
+           effective.i_height != parameters.i_height || effective.i_bitdepth != 8)
+         fail(NESS_V2_E_ENCODER,2,"x264 changed the qualified stream configuration");
+       effective_threads_ = effective.i_threads;
++      if(config_.rate_control!=NESS_V2_CBR &&
++         (effective.rc.i_rc_method!=X264_RC_CRF || effective.rc.f_rf_constant!=parameters.rc.f_rf_constant))
++        fail(NESS_V2_E_ENCODER,2,"x264 changed the requested recording quality");
+       effective_slices_ = effective.i_slice_count;
+       x264_nal_t *nals{};
+       int count{};

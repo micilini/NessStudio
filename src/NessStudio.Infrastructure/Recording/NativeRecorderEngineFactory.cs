@@ -22,14 +22,18 @@ public sealed class NativeRecorderEngineFactory(string applicationDirectory, IDi
         if (!Enum.IsDefined(request.OutputMode)) throw new ArgumentOutOfRangeException(nameof(request));
         if (!request.Targets.AnyVideo && request.OutputMode != RecordingOutputMode.SeparateSources) throw new NotSupportedException("Program modes require a video source.");
         if (!Enum.IsDefined(request.ExecutionMode)) throw new ArgumentOutOfRangeException(nameof(request));
+        if (request.QualityPreset is { } preset &&
+            (!Enum.IsDefined(preset) || RecordingQualityPresets.Normalize(preset, request.ExecutionMode) != preset))
+            throw new NotSupportedException("The selected recording quality is unavailable in this recording mode.");
+        if (request.QualityPreset is not null && request.Video is not null)
+            throw new ArgumentException("Select a recording preset or explicit video options, not both.", nameof(request));
         if (!request.Targets.IsValid(out var selectionError)) throw new ArgumentException(selectionError, nameof(request));
         if (request.Targets.AnyVideo && !NativeCapabilities.SupportedFrameRates.Contains(request.RuntimeOptions.RecordingFps))
             throw new NotSupportedException("The requested recording cadence is unsupported.");
         if (request.Scene is { } scene && (scene.FpsNum != request.RuntimeOptions.RecordingFps || scene.FpsDen != 1))
             throw new ArgumentException("Scene and recording cadence must agree before preparation.", nameof(request));
         if (request.Video is { } video && (video.Width < 2 || video.Height < 2 || video.Width % 2 != 0 || video.Height % 2 != 0 ||
-            video.BitrateBps is < 10000 or > 100000000 || video.Width > 1920 || video.Height > 1080 ||
-            request.ExecutionMode == RecordingExecutionMode.FullSoftware && (video.Width > 1280 || video.Height > 720)))
+            video.BitrateBps is < 10000 or > 100000000 || video.Width > 1920 || video.Height > 1080))
             throw new NotSupportedException("The requested video size/bitrate is outside the qualified recording preset.");
         var directory = Path.GetFullPath(request.OutputDirectory);
         if (!Directory.Exists(directory)) throw new DirectoryNotFoundException(directory);

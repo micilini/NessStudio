@@ -32,6 +32,7 @@ internal static partial class Program
     private static bool _storageSafeguards;
     private static bool _recorderRefinements;
     private static bool _startupFailures;
+    private static bool _recordingQuality;
     private static bool _workstationPreviews;
     private static bool _gpuOnlyPreviews;
     private static int _soakMinutes;
@@ -55,6 +56,7 @@ internal static partial class Program
         else if (args.Length == 3 && args[1] == "cycles") _stressCycles = Math.Clamp(int.Parse(args[2]), 1, 200);
         else if (args.Length == 2 && args[1] == "regressions") _regressions = true;
         else if (args.Length == 2 && args[1] == "dialogs") _dialogs = true;
+        else if (args.Length == 2 && args[1] == "recording-quality") _recordingQuality = true;
         else if (args.Length == 2 && args[1] == "pause-sources") _pauseAllSources = true;
         else if (args.Length == 2 && args[1] == "storage") _storageSafeguards = true;
         else if (args.Length == 2 && args[1] == "recorder-refinements") _recorderRefinements = true;
@@ -112,6 +114,7 @@ internal static partial class Program
                 else if (_storageSafeguards) await RecordingStorageSafeguardsAsync(app);
                 else if (_recorderRefinements) await RecorderRefinementsAsync(app);
                 else if (_startupFailures) await StartupFailuresAsync(app);
+                else if (_recordingQuality) await RecordingQualityAsync(app);
                 else if (_workstationPreviews) await WorkstationAsync(app);
                 else if (_stressCycles > 0) await RecordingCyclesAsync(app, _stressCycles);
                 else if (_soakMinutes > 0) await SoakAsync(app, _soakMinutes);

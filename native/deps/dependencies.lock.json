@@ -8,8 +8,8 @@
     "license": "MIT",
     "compatibilityPatch": {
       "file": "nessmuxer-compat.patch",
-      "sha256": "d35bc6990cba2dbd860961d739d1c2028b427a74dab343ec3bb1554adf8ab8e4",
-      "scope": "QSV pre-start capability classification/API 2.0 minimum; NVENC version diagnostics; bounded owned Windows file writes on a dedicated storage worker. The pinned base is never modified."
+      "sha256": "73e1e163a0d93a90c5f35f7d6525ed5adf573e7572dc9fd213207b6f4c3121ff",
+      "scope": "QSV/API compatibility and bounded Windows storage; source-sized H.264 recording with High profile, x264 CRF, QSV ICQ/CQP and NVENC/AMF CQP. ABI layout unchanged; pinned base is never modified."
     }
   },
   "json": {

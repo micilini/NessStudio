@@ -230,7 +230,7 @@ internal static partial class Program
             var video = request.Video ?? new RecordingVideoOptions(bounds?.Width ?? request.Camera?.Width ?? 1280,
                 bounds?.Height ?? request.Camera?.Height ?? 720, 1_000_000);
             return inner.Create(request with
-                { Video = new RecordingVideoOptions(preserveResolution ? video.Width : 640,
+                { QualityPreset = null, Video = new RecordingVideoOptions(preserveResolution ? video.Width : 640,
                     preserveResolution ? video.Height : 360, 1_000_000) });
         }
     }

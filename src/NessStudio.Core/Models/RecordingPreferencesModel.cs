@@ -10,6 +10,8 @@ namespace NessStudio.Models
         public int RecordingFps { get; set; } = 30;
         /// <summary>Gets or sets the recording execution policy; absent preferences retain Automatic.</summary>
         public NessStudio.Recording.Engines.RecordingExecutionMode ExecutionMode { get; set; }
+        /// <summary>Gets or sets the recording resolution and compression preset.</summary>
+        public NessStudio.Recording.Engines.RecordingQualityPreset QualityPreset { get; set; } = NessStudio.Recording.Engines.RecordingQualityPreset.High;
         /// <summary>Gets or sets the application's microphone recording level (0–100 percent).</summary>
         public double MicrophoneLevel { get; set; } = 100;
         /// <summary>Gets or sets the application's loopback recording level (0–100 percent).</summary>

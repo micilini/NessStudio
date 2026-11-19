@@ -154,8 +154,10 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
                 .Select(format => new RecordingCameraOptions(cameraId,format.GetProperty("width").GetInt32(),format.GetProperty("height").GetInt32(),
                     format.GetProperty("fpsNum").GetInt32(),format.GetProperty("fpsDen").GetInt32(),format.GetProperty("subtype").GetString()!)).ToArray();
             _camera = request.Camera is { } requestedCamera ? requestedCamera with { DeviceId = cameraId }
-                : formats.FirstOrDefault(format => format.Width == 1280 && format.Height == 720 && format.FpsNum == 30 && format.FpsDen == 1)
-                ?? formats.FirstOrDefault(format => format.Width <= 1280 && format.Height <= 720);
+                : formats.Where(format => format.Width <= 1920 && format.Height <= 1080)
+                    .OrderByDescending(format => (long)format.Width * format.Height)
+                    .ThenBy(format => Math.Abs((double)format.FpsNum / format.FpsDen - request.RuntimeOptions.RecordingFps))
+                    .FirstOrDefault();
             if (_camera is null || !formats.Contains(_camera)) throw new NotSupportedException("The explicit camera format is no longer advertised by this device.");
         }
         ValidateEndpoint(request.Targets.MicDeviceId, false);
@@ -175,12 +177,12 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
     private async Task PrepareRouteAsync(RecordingExecutionMode mode, string? monitor)
     {
         bool gpu = mode != RecordingExecutionMode.FullSoftware;
-        bool fullHdDefault = mode is RecordingExecutionMode.RequireGpuResidentHardware or RecordingExecutionMode.GpuWithSoftwareEncoding;
         string nativeMode = NativeRecordingSelection.ModeName(mode);
-        var video = request.Video ?? new RecordingVideoOptions(fullHdDefault && request.Targets.CaptureScreen ? 1920 : 1280,
-            fullHdDefault && request.Targets.CaptureScreen ? 1080 : 720, fullHdDefault ? 12000000 : 6000000);
+        var bounds = request.Crop ?? request.Targets.Screen?.Bounds;
+        var video = request.Video ?? RecordingQualityPresets.Video(request.QualityPreset ?? RecordingQualityPreset.High,
+            request.RuntimeOptions.RecordingFps, bounds?.Width ?? _camera?.Width ?? 1280, bounds?.Height ?? _camera?.Height ?? 720);
         if (!request.Targets.CaptureScreen && _camera is { } input && request.Video is null)
-            video = video with { Width = Math.Min(input.Width,fullHdDefault ? 1920 : 1280), Height = Math.Min(input.Height,fullHdDefault ? 1080 : 720) };
+            video = video with { Width = Math.Min(input.Width, video.Width), Height = Math.Min(input.Height, video.Height) };
         var capture = new Dictionary<string, object?>
         {
             ["version"] = 1, ["mode"] = nativeMode, ["monitor"] = monitor, ["cursor"] = true,
@@ -196,15 +198,20 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
         var controls = new Dictionary<string, object?>
         {
             ["version"] = 1, ["interactive"] = true, ["capture"] = capture,
-            ["encoder"] = new { backend = NativeRecordingSelection.EncoderName(mode), bitrateBps = video.BitrateBps, maxPendingFrames = 16 },
+            ["encoder"] = new { backend = NativeRecordingSelection.EncoderName(mode), bitrateBps = video.BitrateBps, maxPendingFrames = 16,
+                quality = (request.QualityPreset ?? (request.Video is null ? RecordingQualityPreset.High : RecordingQualityPreset.Balanced)).ToString() },
             ["outputPath"] = Path.Combine(request.OutputDirectory, "screen.mkv")
         };
         if (!request.Targets.CaptureScreen) { controls.Remove("capture"); controls["outputPath"] = Path.Combine(request.OutputDirectory,"webcam.mkv"); }
         if (_camera is { } camera)
         {
             controls["camera"] = NativeRecordingWorkspace.CameraPlan(camera);
-            var output = new { width = request.Targets.CaptureScreen ? Math.Min(camera.Width,request.Video is null?1280:video.Width) : video.Width,
-                height = request.Targets.CaptureScreen ? Math.Min(camera.Height,request.Video is null?720:video.Height) : video.Height,
+            var cameraVideo = request.Video is { } explicitVideo
+                ? explicitVideo with { Width = Math.Min(camera.Width, explicitVideo.Width), Height = Math.Min(camera.Height, explicitVideo.Height) }
+                : RecordingQualityPresets.Video(request.QualityPreset ?? RecordingQualityPreset.High,
+                    request.RuntimeOptions.RecordingFps, camera.Width, camera.Height);
+            var output = new { width = request.Targets.CaptureScreen ? cameraVideo.Width : video.Width,
+                height = request.Targets.CaptureScreen ? cameraVideo.Height : video.Height,
                 fpsNum=request.RuntimeOptions.RecordingFps, fpsDen=1, slots=gpu ? 6 : 3 };
             if (request.Targets.CaptureScreen) { controls["cameraOutputPath"] = Path.Combine(request.OutputDirectory,"webcam.mkv"); controls["cameraOutput"] = output; }
             else { controls["mode"] = nativeMode; controls["output"] = output; }
@@ -419,22 +426,18 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
             manifest.CreatedAt = _created; manifest.StartedAtUtc = _startedUtc; manifest.StoppedAtUtc = _stoppedUtc;
             manifest.NativeSelection = Selection; manifest.PrimaryAsset = Path.GetFileName(primary);
             ProjectManifestStore.UpgradeNewRecording(manifest,request.OutputDirectory,"libnessstudio/"+_engine!.Build.Build);
+            string? audioNotice = AudioRecoveryNotice(snapshot.RootElement);
             ProjectMetadataStore.SetDocument(manifest, "recording-native.json", JsonSerializer.SerializeToElement(new
             {
                 version = 1, backend = Capabilities.Backend, build = _engine!.Build, selection = Selection,
-                request = new { request.ExecutionMode, request.OutputMode, scene = _scene, request.Crop, request.Targets.Screen, camera = _camera, request.Targets.MicDeviceId, request.Targets.LoopbackDeviceId },
-                automaticExport = false, finalizationNotice = (string?)null, snapshot = snapshot.RootElement
+                request = new { request.ExecutionMode, request.QualityPreset, request.OutputMode, scene = _scene, request.Crop, request.Targets.Screen, camera = _camera, request.Targets.MicDeviceId, request.Targets.LoopbackDeviceId },
+                automaticExport = false, finalizationNotice = audioNotice, snapshot = snapshot.RootElement
             }));
             manifest.Metadata!.Registration = JsonSerializer.SerializeToElement(new { version = 1, projectId = manifest.ProjectId,
                 registered = false, recoverable = true, sourceAssetsPreserved = true, error = "Finalized native project is awaiting library registration." });
             manifest.Metadata.Recovery = JsonSerializer.SerializeToElement(new { version = 1, resolved = true, projectId = manifest.ProjectId, sourceAssetsPreserved = true });
             ProjectMetadataStore.Consolidate(request.OutputDirectory, manifest);
             Volatile.Write(ref _statistics, new(TimeSpan.FromMilliseconds(manifest.DurationMs!.Value), manifest.HasProgram ? manifest.Program!.FrameCount : manifest.HasScreen ? manifest.Screen.FrameCount : manifest.HasWebcam ? manifest.Webcam.FrameCount : null, finalization.Elapsed));
-            string? audioNotice = null;
-            if (snapshot.RootElement.GetProperty("metrics").TryGetProperty("audio", out var tracks) && tracks.ValueKind == JsonValueKind.Array &&
-                tracks.EnumerateArray().Any(track => track.TryGetProperty("recoveredAudioGaps", out var gaps) &&
-                    gaps.GetProperty("missingInputFrames").GetUInt64() > 0))
-                audioNotice = "A brief interruption from an audio device was filled with silence. Your recording was saved; interruption details are available in the project diagnostics.";
             Result = new(request.OutputDirectory, primary, Path.Combine(request.OutputDirectory, "manifest.json"), Capabilities.Backend, Statistics, Selection,
                 manifest.HasWebcam ? Path.Combine(request.OutputDirectory,manifest.Webcam.File) : null) { FinalizationNotice = audioNotice };
             Publish(RecordingState.Completed);
@@ -469,6 +472,17 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
             throw;
         }
         finally { _control.Release(); }
+    }
+    private static string? AudioRecoveryNotice(JsonElement snapshot)
+    {
+        // Only silence actually inserted into active output is user-visible.
+        // Sub-100ms recoveries and gaps discarded by a pause remain diagnostic.
+        if (!snapshot.GetProperty("metrics").TryGetProperty("audio", out var tracks) || tracks.ValueKind != JsonValueKind.Array)
+            return null;
+        return tracks.EnumerateArray().Any(track => track.TryGetProperty("recoveredAudioGaps", out var gaps) &&
+            gaps.GetProperty("insertedSilentOutputFrames").GetUInt64() >= 4800)
+            ? "An audio device interruption affected part of this recording. It was recovered with silence and your recording was saved. Details are available in the project diagnostics."
+            : null;
     }
     private static void Report(IProgress<RecordingSaveProgress>? progress, string message, int percent) =>
         progress?.Report(new() { Title = "Saving Recording...", Message = message, Percent = percent, CurrentStep = 6, TotalSteps = 8 });

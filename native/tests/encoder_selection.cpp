@@ -70,6 +70,18 @@ int main(int argc,char **argv) {
         "Encoder selection leaked native resources");
       cases.push_back({{"case",mode},{"result",result},{"attempts",details},{"status","PASS"}});
     }
+    if(!absent) for(const auto quality : {NESS_V2_QUALITY_HIGH, NESS_V2_QUALITY_MAXIMUM}) {
+      auto c=make_config(); c.width=1920; c.height=1080; c.profile=NESS_V2_PROFILE_HIGH; c.rate_control=quality;
+      auto error=fresh<ness_error_v2>(); ness_encoder_v2 *raw{};
+      const auto result=nss::select_encoder(c,&gpu,true,true,&raw,error,[](auto,auto,const auto&) {});
+      std::unique_ptr<ness_encoder_v2,decltype(&ness_encoder_release_v2)> encoder(raw,ness_encoder_release_v2);
+      auto info=fresh<ness_encoder_info_v2>();
+      check(result==NESS_V2_OK && ness_encoder_info_get_v2(raw,&info,&error)==NESS_V2_OK &&
+            info.profile==NESS_V2_PROFILE_HIGH && info.width==1920 && info.height==1080 &&
+            info.backend==NESS_V2_BACKEND_X264 && c.rate_control==quality,
+            "Automatic fallback changed Full HD geometry or recording quality");
+      cases.push_back({{"quality",quality},{"fullHdSoftwareFallback",true},{"status","PASS"}});
+    }
     std::cout<<Json{{"status","PASS"},{"cases",cases},{"physicalHardwareEncoding",false},
       {"x264AbsentExpected",absent}}.dump(2)<<'\n';return 0;
   } catch(const std::exception &e) {

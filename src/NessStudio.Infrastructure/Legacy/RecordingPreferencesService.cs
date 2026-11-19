@@ -47,6 +47,7 @@ namespace NessStudio.ViewModel.Helpers
                 model.MicrophoneLevel = NormalizeLevel(model.MicrophoneLevel);
                 model.SystemAudioLevel = NormalizeLevel(model.SystemAudioLevel);
                 if (!Enum.IsDefined(model.ExecutionMode)) model.ExecutionMode = NessStudio.Recording.Engines.RecordingExecutionMode.Automatic;
+                model.QualityPreset = NessStudio.Recording.Engines.RecordingQualityPresets.Normalize(model.QualityPreset, model.ExecutionMode);
                 if (model.CreatedAtUtc == default)
                     model.CreatedAtUtc = DateTime.UtcNow;
                 if (model.UpdatedAtUtc == default)
@@ -75,6 +76,7 @@ namespace NessStudio.ViewModel.Helpers
             model.MicrophoneLevel = NormalizeLevel(model.MicrophoneLevel);
             model.SystemAudioLevel = NormalizeLevel(model.SystemAudioLevel);
             if (!Enum.IsDefined(model.ExecutionMode)) model.ExecutionMode = NessStudio.Recording.Engines.RecordingExecutionMode.Automatic;
+            model.QualityPreset = NessStudio.Recording.Engines.RecordingQualityPresets.Normalize(model.QualityPreset, model.ExecutionMode);
             var now = DateTime.UtcNow;
             if (model.CreatedAtUtc == default)
                 model.CreatedAtUtc = now;
