@@ -303,6 +303,10 @@ Application-owned message dialogs also use English action buttons, including on 
 
 Audio rate estimates can fluctuate after small driver timestamp offsets. Resampler correction remains limited to +/-200 ppm and slewed at no more than 20 ppm per second; an estimate beyond that correction limit is diagnostic and does not by itself terminate continuous audio. The independent checks for missing samples and clock divergence still apply.
 
+Device positions may be quantized by one hardware sample even at the negotiated capture rate. NessStudio normalizes that bounded difference against a cumulative anchor, preserving delivered PCM and raw diagnostics. A driver-flagged forward interruption of at most 200 ms is filled with silence when its valid QPC agrees with the missing-frame duration within 2 ms; missing samples and inserted silence remain explicit in the manifest, and saving reports a notice. Larger, unflagged, backwards or uncertain gaps still fail. This policy applies to WASAPI devices generally, without model-specific rules.
+
+Idle audio meters close their capture streams before the recorder opens the selected endpoints. Pending startup remains in the setup view, can be interrupted when closing, and displays its original failure before device cleanup completes. Multi-track shutdown waits for each track's own GPU inputs; a track cannot wait for another track's resources that will only be released in a subsequent shutdown stage.
+
 Audio capture hands owned packets to processing through a preallocated five-second buffer. Physical audio and video writes run on separate storage workers, with bounded queues of 8 MiB per PCM track and 64 MiB per encoded video track. Disk stalls cannot block the capture/encoding producer while that reserve is available. Payloads and timestamps are preserved; finalization drains every admitted write before completing and persistent overload fails explicitly rather than dropping data.
 
 Output files are prepared before the audio-device initialization deadline starts. File and device preparation times are reported separately; failed startup snapshots are preserved in `recording-startup-error.json`.

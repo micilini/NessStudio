@@ -103,12 +103,13 @@ internal static partial class Program
             "Active controls do not have horizontal breathing room.");
         Interlocked.Exchange(ref available, 8L * 1024 * 1024 * 1024);
         await UntilAsync(() => footer.Text.Contains("8.0 GiB"), "Active free-space status did not refresh.");
-        Check(vm.SystemAudioSignalLevel > .2 && vm.RecordingError is null, "Live meters interfered with native recording.");
+        Check(Field(vm, "_audioMonitor") is null && vm.SystemAudioSignalLevel == 0 && vm.RecordingError is null,
+            "The idle audio meter retained its capture endpoint during native recording.");
         await Task.Delay(2200);
         Screenshot(window, "recorder-active-compact");
         vm.HandleButtonAction(MenuAction.PauseRecording);
         await UntilAsync(() => vm.CurrentRecordingState == RecordingState.Paused, "Recording did not pause.");
-        Check(vm.SystemAudioSignalLevel > .2, "Raw audio monitoring stopped while recording was paused.");
+        Check(Field(vm, "_audioMonitor") is null, "An idle microphone stream reopened while the recorder was paused.");
         Screenshot(window, "recorder-paused-compact");
         vm.HandleButtonAction(MenuAction.PauseRecording);
         await UntilAsync(() => vm.CurrentRecordingState == RecordingState.Recording, "Recording did not resume.");
@@ -121,7 +122,7 @@ internal static partial class Program
             "Recording with live meters did not save intact media: " + vm.RecordingError);
         foreach (var asset in ProjectManifestStore.Assets(ProjectManifestStore.Read(vm.OutDirFolder).Manifest))
             await DecodeExportAsync(ProjectManifestStore.ResolvePath(vm.OutDirFolder, asset.File));
-        Results.Add(new { name = "live-raw-audio-meters-independent-of-gain-with-native-record-pause-resume-save", zeroGainPeak,
+        Results.Add(new { name = "idle-raw-audio-meters-hand-off-endpoints-before-native-record-pause-resume-save", zeroGainPeak,
             idleHeight, activeHeight = 221, directory = vm.OutDirFolder });
         await window.PreviewWorkspace.DisposeAsync();
         foreach (Window open in app.Windows.Cast<Window>().ToArray()) open.Close();

@@ -144,6 +144,8 @@ public interface IRecorderEngineFactory
 /// <summary>Controls and observes recording without Dispatcher, media buffers or native pointers.</summary>
 public interface IRecordingService : IRecorderEngine, IAsyncDisposable
 {
+    /// <summary>Interrupts pending preparation/start without waiting for the serialized control operation.</summary>
+    void CancelStartup() { }
     /// <summary>Atomically updates an active scene and awaits its application on the native worker.</summary>
     Task UpdateSceneAsync(RecordingScene scene, CancellationToken cancellationToken = default) =>
         Task.FromException(new NotSupportedException("This recording backend does not support live scene updates."));

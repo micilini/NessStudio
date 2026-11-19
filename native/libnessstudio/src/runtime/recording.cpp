@@ -1513,10 +1513,11 @@ public:
         }
         if (!pending && !failed_) {
           reap();
-          auto gpu = fresh<ness_gpu_runtime_stats_v2>();
-          checked(ness_gpu_runtime_stats_get_v2(&gpu, &diagnostic), diagnostic);
-          pending =
-              !inflight_.empty() || gpu.completion_states || gpu.input_leases;
+          // Other tracks can retain leases until their Resources stage,
+          // especially after an audio/source failure. Waiting for global GPU
+          // counts here creates a cycle: this stage prevents those Resources
+          // stages from running. Each track waits only for its own inputs.
+          pending = !inflight_.empty();
         }
         break;
       case ShutdownStage::Output:

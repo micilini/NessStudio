@@ -31,6 +31,7 @@ internal static partial class Program
     private static bool _pauseAllSources;
     private static bool _storageSafeguards;
     private static bool _recorderRefinements;
+    private static bool _startupFailures;
     private static bool _workstationPreviews;
     private static bool _gpuOnlyPreviews;
     private static int _soakMinutes;
@@ -57,6 +58,7 @@ internal static partial class Program
         else if (args.Length == 2 && args[1] == "pause-sources") _pauseAllSources = true;
         else if (args.Length == 2 && args[1] == "storage") _storageSafeguards = true;
         else if (args.Length == 2 && args[1] == "recorder-refinements") _recorderRefinements = true;
+        else if (args.Length == 2 && args[1] == "startup-failures") _startupFailures = true;
         else if (args.Length == 2 && args[1] == "previews") _workstationPreviews = true;
         else if (args.Length == 2 && args[1] == "previews-gpu") { _workstationPreviews = true; _gpuOnlyPreviews = true; }
         else if (args.Length == 2) _observeMode = Enum.Parse<RecordingExecutionMode>(args[1]);
@@ -79,6 +81,7 @@ internal static partial class Program
             var errorDialogs = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
             errorDialogs.Tick += (_, _) =>
             {
+                if (_startupFailures) return;
                 if (!app.Windows.OfType<RecordingScreenWindow>().Any(window =>
                     window.DataContext is RecordingScreenWindowVM { RecordingError: not null })) return;
                 foreach (var dialog in app.Windows.OfType<Window>()
@@ -108,6 +111,7 @@ internal static partial class Program
                 else if (_pauseAllSources) await RecordingPauseAllSourcesAsync(app);
                 else if (_storageSafeguards) await RecordingStorageSafeguardsAsync(app);
                 else if (_recorderRefinements) await RecorderRefinementsAsync(app);
+                else if (_startupFailures) await StartupFailuresAsync(app);
                 else if (_workstationPreviews) await WorkstationAsync(app);
                 else if (_stressCycles > 0) await RecordingCyclesAsync(app, _stressCycles);
                 else if (_soakMinutes > 0) await SoakAsync(app, _soakMinutes);

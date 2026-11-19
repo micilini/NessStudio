@@ -78,6 +78,7 @@ class Session final {
     bool stop_requested_{}, started_{}, closing_{}, cleanup_pending_{}, poll_busy_{}, poll_interrupted_{}, stop_result_emitted_{}, fault_emitted_{};
     int64_t stop_started_{};
     int64_t stop_timeout_hns_{};
+    std::optional<ShutdownStage> shutdown_stage_;
     std::atomic<bool> budget_released_{};
     std::filesystem::path journal_path_;
     std::unique_ptr<Journal> journal_;

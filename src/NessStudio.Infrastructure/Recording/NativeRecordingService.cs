@@ -24,6 +24,7 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
     private readonly SemaphoreSlim _control = new(1, 1);
     private readonly object _releaseGate = new();
     private readonly CancellationTokenSource _observation = new();
+    private readonly CancellationTokenSource _startupCancellation = new();
     private NativeEngine? _engine;
     private NativeSession? _session;
     private Task _observer = Task.CompletedTask;
@@ -77,6 +78,20 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
             error.GetProperty("hresult").GetInt32(), error.GetProperty("message").GetString() ?? "Native recording failure");
     }
 
+    public void CancelStartup()
+    {
+        if (Volatile.Read(ref _disposing) != 0 || _started || State is not
+            (RecordingState.Created or RecordingState.Preparing or RecordingState.Ready or RecordingState.Starting or RecordingState.Failed)) return;
+        _startupCancellation.Cancel();
+        if (Volatile.Read(ref _session) is { } session) _ = InterruptStartupAsync(session);
+    }
+
+    private async Task InterruptStartupAsync(NativeSession session)
+    {
+        try { await session.StopAsync().ConfigureAwait(false); }
+        catch (Exception error) { log.Write("[NativeRecording] Startup cancellation: " + UserError.Message(error)); }
+    }
+
     public async Task PrepareAsync()
     {
         await _control.WaitAsync().ConfigureAwait(false);
@@ -84,6 +99,7 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
         {
             EnsureUsable();
             if (State == RecordingState.Ready) return;
+            _startupCancellation.Token.ThrowIfCancellationRequested();
             if (State != RecordingState.Created) throw new InvalidOperationException("This session has already been prepared.");
             Publish(RecordingState.Preparing);
             // One background preparation composition contains the synchronous loader,
@@ -99,6 +115,7 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
     }
     private async Task PrepareCoreAsync()
     {
+        _startupCancellation.Token.ThrowIfCancellationRequested();
         RecordingStorageSpace.EnsureCanStart(request.OutputDirectory, availableSpace);
         if (!float.IsFinite(request.MicrophoneGain) || request.MicrophoneGain is < 0 or > 1 ||
             !float.IsFinite(request.SystemAudioGain) || request.SystemAudioGain is < 0 or > 1)
@@ -208,7 +225,7 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
         }
         var plan = JsonSerializer.SerializeToElement(controls);
         _session = _engine!.CreateSession(plan);
-        Check(await _session.PrepareAsync().ConfigureAwait(false));
+        Check(await _session.PrepareAsync(_startupCancellation.Token).ConfigureAwait(false));
         using var snapshot = _session.GetSnapshot();
         if (SnapshotError(snapshot.RootElement) is { } error) throw error;
         var effectiveMode = request.Targets.AnyVideo ? NativeRecordingSelection.EffectiveMode(snapshot.RootElement) : RecordingExecutionMode.FullSoftware;
@@ -271,7 +288,8 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
         catch (Exception error) { Fail(error); throw; }
         finally { _control.Release(); }
     }
-    public Task StartAsync() => CommandAsync(RecordingState.Starting, RecordingState.Recording, s => s.StartAsync(), RecordingState.Ready);
+    public Task StartAsync() => CommandAsync(RecordingState.Starting, RecordingState.Recording,
+        s => s.StartAsync(_startupCancellation.Token), RecordingState.Ready);
     public Task PauseAsync() => CommandAsync(RecordingState.Pausing, RecordingState.Paused, s => s.PauseAsync(), RecordingState.Recording);
     public Task ResumeAsync() => CommandAsync(RecordingState.Resuming, RecordingState.Recording, s => s.ResumeAsync(), RecordingState.Paused);
     public Task StopAsync() => StopCoreAsync(null);
@@ -307,9 +325,21 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
         {
             if (await Task.WhenAny(closing, Task.Delay(1000)).ConfigureAwait(false) == closing) break;
             bool writing = false;
+            string message = "Closing recording and pending writes...";
             try
             {
                 using var pending = _session.GetSnapshot();
+                if (pending.RootElement.TryGetProperty("shutdownStage", out var stage))
+                    message = stage.GetString() switch
+                    {
+                        "Sources" => "Closing recording devices...",
+                        "Inflight" => "Finishing captured frames...",
+                        "EncoderEos" => "Finishing video encoding...",
+                        "Packets" => "Draining encoded frames...",
+                        "Output" => "Finishing recording files...",
+                        "Resources" => "Releasing recording devices...",
+                        _ => message
+                    };
                 if (pending.RootElement.TryGetProperty("journalDiagnostics", out var journal) &&
                     journal.TryGetProperty("durableWriter", out var writer) && writer.ValueKind == JsonValueKind.Object)
                     writing = writer.GetProperty("active").GetBoolean() || writer.GetProperty("pending").GetBoolean();
@@ -320,7 +350,7 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
                 Title = "Saving Recording...",
                 Message = writing
                     ? $"Waiting for Windows to finish writing... ({elapsed.Elapsed.TotalSeconds:0}s)"
-                    : $"Closing recording and pending writes... ({elapsed.Elapsed.TotalSeconds:0}s)",
+                    : $"{message} ({elapsed.Elapsed.TotalSeconds:0}s)",
                 IsIndeterminate = true, CurrentStep = 1, TotalSteps = 8
             });
         }
@@ -400,8 +430,13 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
             manifest.Metadata.Recovery = JsonSerializer.SerializeToElement(new { version = 1, resolved = true, projectId = manifest.ProjectId, sourceAssetsPreserved = true });
             ProjectMetadataStore.Consolidate(request.OutputDirectory, manifest);
             Volatile.Write(ref _statistics, new(TimeSpan.FromMilliseconds(manifest.DurationMs!.Value), manifest.HasProgram ? manifest.Program!.FrameCount : manifest.HasScreen ? manifest.Screen.FrameCount : manifest.HasWebcam ? manifest.Webcam.FrameCount : null, finalization.Elapsed));
+            string? audioNotice = null;
+            if (snapshot.RootElement.GetProperty("metrics").TryGetProperty("audio", out var tracks) && tracks.ValueKind == JsonValueKind.Array &&
+                tracks.EnumerateArray().Any(track => track.TryGetProperty("recoveredAudioGaps", out var gaps) &&
+                    gaps.GetProperty("missingInputFrames").GetUInt64() > 0))
+                audioNotice = "A brief interruption from an audio device was filled with silence. Your recording was saved; interruption details are available in the project diagnostics.";
             Result = new(request.OutputDirectory, primary, Path.Combine(request.OutputDirectory, "manifest.json"), Capabilities.Backend, Statistics, Selection,
-                manifest.HasWebcam ? Path.Combine(request.OutputDirectory,manifest.Webcam.File) : null);
+                manifest.HasWebcam ? Path.Combine(request.OutputDirectory,manifest.Webcam.File) : null) { FinalizationNotice = audioNotice };
             Publish(RecordingState.Completed);
             return primary;
         }
@@ -455,7 +490,7 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
             // CloseAsync has observed every native worker's completion before
             // either owned handle or the engine context may be released.
             _engine?.Dispose(); _engine = null;
-            _observation.Dispose(); Publish(RecordingState.Disposed); StateChanged = null;
+            _observation.Dispose(); _startupCancellation.Dispose(); Publish(RecordingState.Disposed); StateChanged = null;
         }
         finally { _control.Release(); }
     }

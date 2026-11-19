@@ -130,6 +130,7 @@ void Session::stop_pipeline() {
     { std::lock_guard lock(mutex_); cleanup_pending_ = true; if (!stop_started_) stop_started_ = qpc_hns(); clock_.stop(qpc_hns()); }
     checkpoint(true);
     for (auto stage = ShutdownStage::Sources; stage != ShutdownStage::Done; stage = static_cast<ShutdownStage>(static_cast<int>(stage) + 1)) {
+        { std::lock_guard lock(mutex_); shutdown_stage_ = stage; }
         if (stage == ShutdownStage::Output) { std::lock_guard lock(mutex_); if (!first_error_) state_ = NSS_FINALIZING; }
         worker_heartbeat_ = qpc_hns();
         checkpoint(true);
@@ -157,7 +158,7 @@ void Session::stop_pipeline() {
         std::lock_guard lock(mutex_);
         // Cleanup includes the durable writer. A concurrent snapshot must
         // not invite CloseAsync or another session before that owner joins.
-        cleanup_pending_ = false; release_budget();
+        cleanup_pending_ = false; shutdown_stage_ = ShutdownStage::Done; release_budget();
         if (stop_id_ && !stop_result_emitted_) { emit(stop_id_, result_, NSS_EVENT_RESULT, first_error_ ? *first_error_ : Fault{}); stop_result_emitted_ = true; }
         changed_.notify_all();
     }
@@ -266,10 +267,11 @@ Json Session::snapshot(bool include_metrics) const {
     Json secondary = Json::array(); for (size_t i = 0; i < secondary_count_; ++i) secondary.push_back(diagnostic(secondary_[i]));
     const auto now = qpc_hns();
     const auto journal_text = journal_path_.u8string();
+    const char *shutdown_names[] = {"Sources", "Inflight", "EncoderEos", "Packets", "Output", "Resources", "Done"};
     result = {{"version", 1}, {"objectId", id_}, {"state", state_}, {"lastSequence", sequence_}, {"pendingCommandId", stop_requested_ && !stop_result_emitted_ ? stop_id_ : operation_ ? operation_->id : 0},
         {"operationResult", result_}, {"mediaComplete", state_ == NSS_COMPLETED && !first_error_ && backend_->media_complete()}, {"cleanupPending", cleanup_pending_},
         {"firstError", first_error_ ? diagnostic(*first_error_) : Json(nullptr)}, {"secondaryErrors", secondary}, {"secondaryErrorsSuppressed", secondary_suppressed_},
-        {"requested", requested_},
+        {"requested", requested_}, {"shutdownStage", shutdown_stage_ ? Json(shutdown_names[static_cast<size_t>(*shutdown_stage_)]) : Json(nullptr)},
         {"journalPath", std::string(reinterpret_cast<const char*>(journal_text.data()), journal_text.size())},
         {"watchdog", {{"diagnosticOnly", stop_timeout_hns_ == 0},
             {"workerHeartbeatAgeHns", (std::max)(int64_t{}, now - worker_heartbeat_.load())},

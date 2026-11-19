@@ -342,7 +342,9 @@ public:
 class PacketPosition {
   uint32_t client_rate_{}, endpoint_rate_{}, position_rate_{}, previous_frames_{};
   uint64_t anchor_raw_{}, anchor_pcm_{}, previous_raw_{}, next_pcm_{}, previous_qpc_{};
+  uint64_t normalized_positions_{}, maximum_normalized_deviation_{};
   bool initialized_{}, selected_{}, initial_discontinuity_{}, previous_valid_{};
+  bool normalized_{};
 public:
   void configure(uint32_t client, uint32_t endpoint) {
     client_rate_ = position_rate_ = client;
@@ -351,8 +353,15 @@ public:
   }
   uint32_t rate() const { return position_rate_; }
   bool selected() const { return selected_; }
+  bool normalized() const { return normalized_; }
+  Json diagnostics() const {
+    return {{"normalizedPackets", normalized_positions_},
+            {"maximumNormalizedPcmFrames", maximum_normalized_deviation_},
+            {"cumulativeAnchorPreserved", true}, {"rawPositionsPreserved", true}};
+  }
   uint64_t map(uint64_t raw, uint32_t frames, uint64_t qpc,
                bool discontinuity, bool valid) {
+    normalized_ = false;
     if (!initialized_) {
       initialized_ = true;
       anchor_raw_ = previous_raw_ = raw;
@@ -391,12 +400,18 @@ public:
     if (relative > (std::numeric_limits<uint64_t>::max)() - anchor_pcm_)
       throw Error(NSS_E_IO, NSS_STAGE_AUDIO, 0, "Audio sample position overflow");
     auto pcm = anchor_pcm_ + relative;
-    if (position_rate_ != client_rate_) {
+    {
       // Test against the cumulative anchor so rounding cannot conceal a small
       // loss on every packet. One hardware sample is the position resolution.
       const auto tolerance = (client_rate_ + position_rate_ - 1) / position_rate_;
-      if ((pcm >= next_pcm_ ? pcm - next_pcm_ : next_pcm_ - pcm) <= tolerance)
+      const auto deviation = pcm >= next_pcm_ ? pcm - next_pcm_ : next_pcm_ - pcm;
+      const bool correlated = valid && previous_valid_ &&
+          std::abs(double(static_cast<int64_t>(qpc) - static_cast<int64_t>(previous_qpc_)) -
+                   double(previous_frames_) * hns_per_second / client_rate_) <= 700000;
+      if (deviation <= tolerance && (position_rate_ != client_rate_ || correlated)) {
+        if (deviation) { normalized_ = true; ++normalized_positions_; maximum_normalized_deviation_ = (std::max)(maximum_normalized_deviation_, deviation); }
         pcm = next_pcm_;
+      }
     }
     if (pcm > (std::numeric_limits<uint64_t>::max)() - frames)
       throw Error(NSS_E_IO, NSS_STAGE_AUDIO, 0, "Audio sample position overflow");
@@ -446,6 +461,7 @@ class Stream {
   uint64_t base_{}, next_device_{}, packets_{}, captured_{},
       silent_{}, discontinuities_{}, paused_samples_{}, gap_samples_{},
       timestamp_errors_{}, idle_samples_{}, continuous_timing_discontinuities_{};
+  uint64_t recovered_gap_packets_{}, recovered_gap_samples_{}, recovered_gap_silence_{};
   int64_t last_qpc_{}, last_valid_qpc_{};
   int64_t maximum_timestamp_residual_hns_{}, last_clock_observation_qpc_{};
   uint64_t smoothed_timestamp_packets_{}, rejected_clock_observations_{};
@@ -522,6 +538,7 @@ class Stream {
                                       : "L/R preserved"},
                {"deviceMixFormat", mix_format_},
                {"packetPositionRate", packet_position_.rate()},
+               {"packetPositionNormalization", packet_position_.diagnostics()},
                {"wasapiFormatConversion", false},
                {"reportPublishedQpcHns", now},
                {"regularReportIntervalMs", 1000},
@@ -547,6 +564,10 @@ class Stream {
                {"clockRateEstimator", clock_report()},
                {"loopbackNoPacketIdleIntervals", idle_intervals_},
                {"lostSamples", lost_samples_},
+               {"recoveredAudioGaps", {{"packets", recovered_gap_packets_},
+                   {"missingInputFrames", recovered_gap_samples_}, {"insertedSilentOutputFrames", recovered_gap_silence_},
+                   {"maximumGapMs", 200}, {"clockCorrelationToleranceMs", 2},
+                   {"policy", "Retain delivered PCM; fill bounded, driver-flagged forward gaps with silence"}}},
                {"terminalAlignmentSilenceSamples", terminal_pad_},
                {"loopbackClockKeepalive", loopback_},
                {"keepaliveSubmittedSilentFrames", keepalive_frames_},
@@ -666,7 +687,7 @@ class Stream {
     }
     const bool position_gap = next_device_ && position != next_device_;
     const bool observed_loopback_idle = loopback_ && observed_idle_hns >= 300000;
-    bool reliable_clock_observation = !(flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR);
+    bool reliable_clock_observation = !(flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR) && !packet_position_.normalized();
     if (last_qpc_ && !position_gap && !observed_loopback_idle) {
       // Packet QPC values can jitter even without TIMESTAMP_ERROR. Device
       // positions prove whether PCM is missing. Keep contiguous samples on a
@@ -696,10 +717,6 @@ class Stream {
     } else {
       timestamp_fraction_hns_ = 0;
     }
-    if (!(flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR)) {
-      last_valid_qpc_ = static_cast<int64_t>(qpc);
-      last_valid_position_ = position;
-    }
     if (last_qpc_ && static_cast<int64_t>(qpc) < last_qpc_)
       throw Error(NSS_E_IO, NSS_STAGE_AUDIO, 0,
                   "Audio timestamp moved backwards");
@@ -707,17 +724,29 @@ class Stream {
         last_qpc_ && static_cast<int64_t>(qpc) - last_qpc_ -
                              sample_time(previous_frames_, rate_) >
                          200000;
+    bool recovered_gap = false;
     if (position_gap || qpc_gap) {
       if (position < next_device_)
         throw Error(NSS_E_IO, NSS_STAGE_AUDIO, 0,
                     "Audio device position moved backwards");
-      gap_samples_ += position - next_device_;
+      const auto missing = position - next_device_;
+      gap_samples_ += missing;
       // Idle loopback is established by repeated empty polls, never inferred
       // from a dropped packet alone.
       const bool observed_idle =
           loopback_ && observed_idle_hns >= 300000;
-      if (!observed_idle) {
-        lost_samples_ += position - next_device_;
+      // A driver-reported discontinuity can lose a short packet without
+      // invalidating the video and all remaining audio. Require agreement
+      // between positions and the valid QPC, bound the hole, and preserve it
+      // as explicit silence rather than compressing time or dropping PCM.
+      const auto correlated_qpc = missing <= rate_ / 5
+          ? last_qpc_ + sample_time(previous_frames_ + missing, rate_) : last_qpc_;
+      recovered_gap = !observed_idle && missing > 0 && missing <= rate_ / 5 &&
+          (flags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY) &&
+          !(flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR) &&
+          std::abs(static_cast<int64_t>(qpc) - correlated_qpc) <= 20000;
+      if (!observed_idle && !recovered_gap) {
+        lost_samples_ += missing;
         const auto detail =
             "Mandatory audio timestamp/sample gap: position=" +
             std::to_string(position) +
@@ -727,7 +756,13 @@ class Stream {
             " flags=" + std::to_string(flags);
         throw Error(NSS_E_IO, NSS_STAGE_AUDIO, 0, detail.c_str());
       }
-      ++idle_intervals_;
+      if (recovered_gap) {
+        ++recovered_gap_packets_;
+        recovered_gap_samples_ += missing;
+        lost_samples_ += missing;
+        qpc = static_cast<uint64_t>(correlated_qpc);
+        reliable_clock_observation = false;
+      } else ++idle_intervals_;
       flush_segment(next_device_, true);
       clock_rate_.reset();
       last_clock_observation_qpc_ = 0;
@@ -742,12 +777,16 @@ class Stream {
       if (flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR)
         throw Error(NSS_E_IO, NSS_STAGE_AUDIO, 0,
                     "Audio discontinuity has an uncertain timestamp");
-      ++continuous_timing_discontinuities_;
+      if (!recovered_gap) ++continuous_timing_discontinuities_;
     }
     if (flags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY)
       ++discontinuities_;
     if (flags & AUDCLNT_BUFFERFLAGS_SILENT)
       silent_ += frames;
+    if (!(flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR)) {
+      last_valid_qpc_ = static_cast<int64_t>(qpc);
+      last_valid_position_ = position;
+    }
     // Extrapolated timestamps may preserve a bounded damaged packet, but must
     // not train the estimator from its own previous correction.
     if (reliable_clock_observation && static_cast<int64_t>(raw_qpc) >= last_clock_observation_qpc_ && packet_position_.selected()) {
@@ -789,6 +828,7 @@ class Stream {
         const auto target = scale_floor(static_cast<uint64_t>(slice.pts_hns),
                                         48000, hns_per_second);
         if (target > wave_.count()) {
+          if (recovered_gap) recovered_gap_silence_ += target - wave_.count();
           idle_samples_ += target - wave_.count();
           wave_.silence_until(target);
         }
@@ -1236,7 +1276,7 @@ public:
       const auto physical_qpc = qpc;
       uint64_t position = scale_floor(pos, position_rate, rate);
       DWORD flags{};
-      const uint32_t frames = partial_first && pos == 0 ? quantum - 17 : quantum;
+      uint32_t frames = partial_first && pos == 0 ? quantum - 17 : quantum;
       if (partial_first && pos == 0) flags = AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY;
       if (fault == 1 && pos == 0)
         flags = AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR;
@@ -1279,6 +1319,36 @@ public:
       if (fault == 21 && packet_index >= 200) qpc += 16428;
       if (fault == 22 && packet_index >= 100)
         qpc = packet_index / 100 % 2 ? qpc + 8000 : qpc - 8000;
+      const auto missing = uint64_t(position_rate / 1000);
+      const bool after_gap = packet_index >= 200;
+      if (fault == 29 && after_gap) {
+        position += missing;
+        qpc += packet_index == 200 ? 8085 : 10000;
+        if (packet_index == 200) flags = AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY;
+        if (pos + quantum >= uint64_t(rate) * 6) frames -= rate / 1000;
+      }
+      if (fault >= 30 && fault <= 33 && packet_index == 200) {
+        const auto gap = fault == 30 ? position_rate / 4 : missing;
+        position = fault == 33 ? position - gap : position + gap;
+        qpc += fault == 30 ? hns_per_second / 4 : 10000;
+        flags = fault == 31 ? 0 : AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY;
+        if (fault == 32) flags |= AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR;
+      }
+      if (fault == 23 && packet_index) {
+        // Reported Intel Smart Sound startup: position=481, expected=480,
+        // QPC delta=100157 hns, discontinuity flag, with 480 delivered frames.
+        ++position;
+        qpc += 157;
+        if (packet_index == 1) flags = AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY;
+      }
+      if (fault == 24 && packet_index % 2) ++position;
+      if (fault == 25 && packet_index) position += packet_index;
+      if (fault == 26 && packet_index == 1) {
+        ++position;
+        flags = AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR | AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY;
+      }
+      if (fault == 27 && packet_index == 1) { ++position; qpc += hns_per_second; }
+      if (fault == 28 && packet_index) --position;
       for (uint32_t i = 0; i < quantum; ++i) {
         const auto at = physical_qpc + static_cast<uint64_t>(sample_time(i, rate));
         const double hz = pause && at >= uint64_t(epoch + 12345678) &&
@@ -1286,7 +1356,8 @@ public:
                               ? 4000
                               : 1000;
         const float value = static_cast<float>(
-            .25 * std::sin(2 * std::numbers::pi * hz * double(pos + i) / rate));
+            .25 * std::sin(2 * std::numbers::pi * hz * double(pos + i +
+                (fault == 29 && after_gap ? rate / 1000 : 0)) / rate));
         for (uint32_t c = 0; c < channels; ++c)
           std::memcpy(copy.data() + (size_t(i) * channels + c) * 4, &value, 4);
       }
@@ -1594,6 +1665,71 @@ Json qualify(const std::string &scope, const std::string &directory) {
         cases.push_back(std::move(result));
       }
   } else if (scope == "position-domain") {
+    for (const auto rate : {48000u, 16000u, 44100u, 96000u}) {
+      for (const bool paused : {false, true}) {
+        const auto reference_path = filename();
+        const auto reference = Stream::fixture(reference_path, rate, 2, paused);
+        auto bytes = [](const std::string &path) {
+          std::ifstream input(std::filesystem::path(wide(path)), std::ios::binary);
+          return std::vector<char>((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+        };
+        const auto reference_bytes = bytes(reference_path);
+        for (const int fault : {23, 24, 28}) {
+          const auto path = filename();
+          auto quantized = Stream::fixture(path, rate, 2, paused, 0, fault);
+          check(quantized.at("lostSamples") == 0 && quantized.at("deviceGapSamples") == 0 &&
+                quantized.at("finalized") == true && quantized.at("inputSamples") == reference.at("inputSamples") &&
+                quantized.at("outputSamples") == reference.at("outputSamples") && bytes(path) == reference_bytes,
+                "One-frame device position quantization changed or discarded the delivered PCM");
+          quantized["qualificationFault"] = fault;
+          quantized["bitExactWithoutPositionQuantization"] = true;
+          cases.push_back(std::move(quantized));
+        }
+      }
+    }
+    for (const int fault : {25, 26, 27}) {
+      bool failed{};
+      try { Stream::fixture(filename(), 48000, 2, false, 0, fault); }
+      catch (const Error &error) { failed = error.stage == NSS_STAGE_AUDIO; }
+      check(failed, "Position normalization concealed cumulative loss or an unreliable clock");
+      cases.push_back({{"expectedFault", fault}, {"passed", true}});
+    }
+    for (const auto rate : {16000u, 48000u}) {
+      for (const bool paused : {false, true}) {
+        const auto path = filename();
+        auto repaired = Stream::fixture(path, rate, 2, paused, 0, 29);
+        const auto &recovery = repaired.at("recoveredAudioGaps");
+        // Pause cuts and rate conversion quantize boundaries to input frames.
+        const uint64_t rounding = (48000u + rate - 1) / rate;
+        check(repaired.at("lostSamples") == rate / 1000 && repaired.at("deviceGapSamples") == rate / 1000 &&
+              recovery.at("packets") == 1 && recovery.at("missingInputFrames") == rate / 1000 &&
+              recovery.at("insertedSilentOutputFrames").get<uint64_t>() >= 48 - rounding &&
+              recovery.at("insertedSilentOutputFrames").get<uint64_t>() <= 48 + rounding && repaired.at("finalized") == true &&
+              repaired.at("outputSamples") == (paused ? 272000u : 288000u),
+              ("A correlated one-ms driver discontinuity did not preserve the common recording cut: rate=" +
+               std::to_string(rate) + " paused=" + std::to_string(paused) + " lost=" +
+               repaired.at("lostSamples").dump() + " deviceGap=" + repaired.at("deviceGapSamples").dump() +
+               " recovery=" + recovery.dump() + " output=" + repaired.at("outputSamples").dump()).c_str());
+        if (!paused) {
+          std::ifstream file(std::filesystem::path(wide(path)), std::ios::binary);
+          file.seekg(80 + (12000 + 96000) * 4);
+          std::array<int16_t, 96> silence{};
+          file.read(reinterpret_cast<char *>(silence.data()), sizeof(silence));
+          check(file.gcount() == sizeof(silence) &&
+                std::all_of(silence.begin(), silence.end(), [](int16_t sample) { return sample == 0; }),
+                "Recovered audio gap was not filled with exactly timed silent PCM");
+        }
+        repaired["oneMillisecondDriverGapPreservedAsSilence"] = true;
+        cases.push_back(std::move(repaired));
+      }
+    }
+    for (const int fault : {30, 31, 32, 33}) {
+      bool failed{};
+      try { Stream::fixture(filename(), 48000, 2, false, 0, fault); }
+      catch (const Error &error) { failed = error.stage == NSS_STAGE_AUDIO; }
+      check(failed, "Discontinuity recovery accepted a large, unflagged, uncertain or backwards gap");
+      cases.push_back({{"expectedFault", fault}, {"passed", true}});
+    }
     for (const auto rates : {std::array<uint32_t, 3>{48000, 16000, 16000},
                             {16000, 48000, 48000}, {44100, 48000, 48000},
                             {48000, 44100, 44100}, {48000, 48000, 16000}}) {
