@@ -120,6 +120,7 @@ namespace NessStudio.ViewModel
                     MicrophoneIcon = _isMicrophoneEnabled
                         ? "/Assets/Images/microfone-icon.png"
                         : "/Assets/Images/microfone-closed-icon.png";
+                    UpdateAudioMonitoring();
                 }
             }
         }
@@ -137,6 +138,7 @@ namespace NessStudio.ViewModel
                     SystemAudioIcon = _isSystemAudioEnabled
                         ? "/Assets/Images/system-audio-icon.png"
                         : "/Assets/Images/system-audio-closed-icon.png";
+                    UpdateAudioMonitoring();
                 }
             }
         }
@@ -205,6 +207,7 @@ namespace NessStudio.ViewModel
             }
         }
         private bool isRecordingPanelVisible = false;
+        public double RecorderWindowHeight => IsRecordingPanelVisible ? 221 : 316;
         public bool IsRecordingPanelVisible
         {
             get => isRecordingPanelVisible;
@@ -212,6 +215,7 @@ namespace NessStudio.ViewModel
             {
                 isRecordingPanelVisible = value;
                 OnPropertyChanged("IsRecordingPanelVisible");
+                OnPropertyChanged(nameof(RecorderWindowHeight));
             }
         }
         private bool isSettingsPanelVisible = true;
@@ -272,6 +276,7 @@ namespace NessStudio.ViewModel
                 _selectedRecordingFps = normalized;
                 OnPropertyChanged(nameof(SelectedRecordingFps));
                 OnPropertyChanged(nameof(CurrentSettingsSummary));
+                OnPropertyChanged(nameof(FooterStatusMessage));
             }
         }
         private int _selectedRecordingTimerSeconds = 3;
@@ -301,9 +306,11 @@ namespace NessStudio.ViewModel
                     ? System.Windows.Interop.RenderMode.SoftwareOnly : ((App)System.Windows.Application.Current).Options.PresentationMode;
                 if (_isLoaded) UpdateIdlePreview();
                 OnPropertyChanged(nameof(SelectedExecutionMode)); OnPropertyChanged(nameof(CurrentSettingsSummary));
+                OnPropertyChanged(nameof(FooterStatusMessage));
             }
         }
         public string CurrentSettingsSummary => $"{SelectedRecordingFps} fps • {SelectedRecordingTimerSeconds}s • {SelectedExecutionMode switch { RecordingExecutionMode.FullSoftware => "CPU", RecordingExecutionMode.RequireGpuResidentHardware => "GPU", RecordingExecutionMode.GpuWithSoftwareEncoding => "GPU + CPU", _ => "Auto" }}";
+        public string FooterStatusMessage => $"Recording mode: {SelectedExecutionMode switch { RecordingExecutionMode.FullSoftware => "CPU", RecordingExecutionMode.RequireGpuResidentHardware => "GPU", RecordingExecutionMode.GpuWithSoftwareEncoding => "GPU + CPU", _ => "Automatic" }} • {SelectedRecordingFps} FPS • {DiskSpaceMessage}";
         public ObservableCollection<RecordingPresetOption> FpsOptions { get; } = new();
         public ObservableCollection<RecordingPresetOption> TimerOptions { get; } = new();
         public ObservableCollection<RecordingPresetOption> ExecutionModeOptions { get; } = new();
@@ -366,8 +373,8 @@ namespace NessStudio.ViewModel
         public ObservableCollection<RecordingCameraOptions> CameraFormats { get; } = new();
         private RecordingCameraOptions? _selectedCameraFormat;
         public RecordingCameraOptions? SelectedCameraFormat { get => _selectedCameraFormat; set { _selectedCameraFormat=value; OnPropertyChanged(nameof(SelectedCameraFormat)); if (_isLoaded) UpdateWebcamPreviewRunning(); } }
-        public MMDevice SelectedMicrophone { get => _selectedMicrophone; set { _selectedMicrophone = value; OnPropertyChanged(nameof(SelectedMicrophone)); } }
-        public MMDevice SelectedRenderLoopback { get => _selectedRender; set { _selectedRender = value; OnPropertyChanged(nameof(SelectedRenderLoopback)); } }
+        public MMDevice SelectedMicrophone { get => _selectedMicrophone; set { _selectedMicrophone = value; OnPropertyChanged(nameof(SelectedMicrophone)); UpdateAudioMonitoring(); } }
+        public MMDevice SelectedRenderLoopback { get => _selectedRender; set { _selectedRender = value; OnPropertyChanged(nameof(SelectedRenderLoopback)); UpdateAudioMonitoring(); } }
         private Screen _selectedScreen;
         private RecordingCameraDescriptor _selectedWebcam;
         private MMDevice _selectedMicrophone;
@@ -408,6 +415,19 @@ namespace NessStudio.ViewModel
         private bool _isPaused = false;
         private DispatcherTimer _recTimer;
         private DispatcherTimer? _storageTimer;
+        private DispatcherTimer? _audioMeterTimer;
+        private readonly AudioLevelMonitor _audioMonitor = new();
+        private double _microphoneSignalLevel, _systemAudioSignalLevel;
+        public double MicrophoneSignalLevel
+        {
+            get => _microphoneSignalLevel;
+            private set { if (_microphoneSignalLevel == value) return; _microphoneSignalLevel = value; OnPropertyChanged(nameof(MicrophoneSignalLevel)); }
+        }
+        public double SystemAudioSignalLevel
+        {
+            get => _systemAudioSignalLevel;
+            private set { if (_systemAudioSignalLevel == value) return; _systemAudioSignalLevel = value; OnPropertyChanged(nameof(SystemAudioSignalLevel)); }
+        }
         private readonly Func<string, ulong> _availableSpace;
         private RecordingStorageStatus? _storageStatus;
         private bool _storageQueryBusy, _storageQueryErrorLogged, _storageQueryUnavailable;
@@ -524,6 +544,10 @@ namespace NessStudio.ViewModel
                 RecordingPerfProbe.Mark("recording-window-audio-populated", $"mics={Microphones.Count}");
 
                 _isLoaded = true;
+                _audioMeterTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(50), DispatcherPriority.Background,
+                    (_, _) => RefreshAudioMeters(), RecordingScreenWindow.Dispatcher);
+                UpdateAudioMonitoring();
+                _audioMeterTimer.Start();
                 RefreshRecordingCommands();
 
                 await RecordingScreenWindow.Dispatcher.InvokeAsync(
@@ -715,6 +739,9 @@ namespace NessStudio.ViewModel
         }
         private async void RecordingScreenWindow_Unloaded(object sender, RoutedEventArgs e)
         {
+            _audioMeterTimer?.Stop();
+            _storageTimer?.Stop();
+            await _audioMonitor.DisposeAsync();
             StopScreenPreview();
             StopWebcamPreview();
 
@@ -778,6 +805,8 @@ namespace NessStudio.ViewModel
         {
             _isClosing = true;
             _storageTimer?.Stop();
+            _audioMeterTimer?.Stop();
+            await _audioMonitor.DisposeAsync();
             ClearDrawAreaOverlay();
             _recTimer?.Stop();
             await _previews.DisposeAsync();
@@ -793,6 +822,7 @@ namespace NessStudio.ViewModel
             _storageQueryUnavailable = false;
             _storageStatus = status;
             OnPropertyChanged(nameof(DiskSpaceMessage));
+            OnPropertyChanged(nameof(FooterStatusMessage));
             OnPropertyChanged(nameof(IsDiskSpaceLow));
         }
 
@@ -818,7 +848,7 @@ namespace NessStudio.ViewModel
             catch (Exception error)
             {
                 _storageQueryUnavailable = true;
-                if (!_isClosing) { OnPropertyChanged(nameof(DiskSpaceMessage)); OnPropertyChanged(nameof(IsDiskSpaceLow)); }
+                if (!_isClosing) { OnPropertyChanged(nameof(DiskSpaceMessage)); OnPropertyChanged(nameof(FooterStatusMessage)); OnPropertyChanged(nameof(IsDiskSpaceLow)); }
                 if (!_storageQueryErrorLogged)
                 {
                     _storageQueryErrorLogged = true;
@@ -827,6 +857,29 @@ namespace NessStudio.ViewModel
                 // An unavailable query is not evidence that the disk is full.
             }
             finally { _storageQueryBusy = false; }
+        }
+
+        private void UpdateAudioMonitoring()
+        {
+            if (!_isLoaded || _isClosing) return;
+            _audioMonitor.Configure(IsMicrophoneEnabled ? SelectedMicrophone?.ID : null,
+                IsSystemAudioEnabled ? SelectedRenderLoopback?.ID : null);
+            if (!IsMicrophoneEnabled || SelectedMicrophone is null) MicrophoneSignalLevel = 0;
+            if (!IsSystemAudioEnabled || SelectedRenderLoopback is null) SystemAudioSignalLevel = 0;
+        }
+
+        private void RefreshAudioMeters()
+        {
+            if (_isClosing) return;
+            var levels = _audioMonitor.ReadLevels();
+            MicrophoneSignalLevel = IsMicrophoneEnabled ? ReleaseMeter(MicrophoneSignalLevel, levels.Microphone) : 0;
+            SystemAudioSignalLevel = IsSystemAudioEnabled ? ReleaseMeter(SystemAudioSignalLevel, levels.SystemAudio) : 0;
+        }
+
+        private static double ReleaseMeter(double previous, double current)
+        {
+            double level = Math.Max(Math.Clamp(current, 0, 100), previous * 0.72);
+            return level < 0.1 ? 0 : level;
         }
 
         private void PopulateScreens()

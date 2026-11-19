@@ -101,7 +101,8 @@ namespace NessStudio.Components.RecentProjects
                 VerticalContentAlignment = VerticalAlignment.Stretch
             };
 
-            thumbButton.Click += (s, e) => RecentProjectsControlVM.OpenInExplorer(model.ProjectFolderPath);
+            thumbButton.Click += async (s, e) => await RunProjectActionAsync(model, card,
+                () => RecentProjectsControlVM.OpenInExplorer(model.ProjectFolderPath));
 
             BindingOperations.SetBinding(thumbButton, FrameworkElement.HeightProperty,
                 new Binding("ActualHeight") { Source = thumbBorder });
@@ -293,10 +294,11 @@ namespace NessStudio.Components.RecentProjects
             };
 
             var openItem = BuildMenuItem("📂", "Open", false);
-            openItem.Click += (s, e) => RecentProjectsControlVM.OpenInExplorer(model.ProjectFolderPath);
+            openItem.Click += async (s, e) => await RunProjectActionAsync(model, card,
+                () => RecentProjectsControlVM.OpenInExplorer(model.ProjectFolderPath));
 
             var exportItem = BuildMenuItem("↓", "Export", false);
-            exportItem.Click += (s, e) => OpenExportWindow(model);
+            exportItem.Click += async (s, e) => await RunProjectActionAsync(model, card, () => OpenExportWindow(model));
 
             var deleteItem = BuildMenuItem("🗑", "Delete", true);
             deleteItem.Click += async (s, e) => await DeleteProjectFromCardAsync(model, card);
@@ -345,16 +347,6 @@ namespace NessStudio.Components.RecentProjects
         {
             try
             {
-                if (string.IsNullOrWhiteSpace(model.ProjectFolderPath) || !Directory.Exists(model.ProjectFolderPath))
-                {
-                    MessageBox.Show(
-                        "The recording folder was not found.",
-                        "Export Recording",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Warning);
-                    return;
-                }
-
                 var owner = Window.GetWindow(this);
                 var exportWindow = new ExportScreenWindow(model)
                 {
@@ -372,6 +364,52 @@ namespace NessStudio.Components.RecentProjects
                     "Export Recording",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
+            }
+        }
+
+        private readonly HashSet<int> _pendingProjectActions = new();
+
+        private async Task RunProjectActionAsync(ProjectsModel model, Border card, Action action)
+        {
+            if (!_pendingProjectActions.Add(model.Id)) return;
+            try
+            {
+                var validation = await Task.Run(() => ProjectFilesValidation.Check(model.ProjectFolderPath));
+                if (validation.IsValid)
+                {
+                    action();
+                    return;
+                }
+
+                var result = MessageBox.Show(Window.GetWindow(this), validation.Message, "Recording Files",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                if (result == MessageBoxResult.OK && validation.RemoveFromLibrary)
+                {
+                    if (RecentProjectsControlVM.RemoveProjectFromLibrary(model))
+                        RemoveProjectCard(card);
+                    else
+                        MessageBox.Show("Failed to remove this recording from the library. Please try again.",
+                            "Recording Files", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+            catch (Exception error)
+            {
+                DebugLog.Write("[RecentProjects] Project action ERROR:\n" + UserError.Details(error));
+                MessageBox.Show("Unable to open this recording.\n\n" + UserError.Message(error),
+                    "Recording Files", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally { _pendingProjectActions.Remove(model.Id); }
+        }
+
+        private void RemoveProjectCard(Border card)
+        {
+            if (ProjectsWrapPanel.Children.Contains(card))
+                ProjectsWrapPanel.Children.Remove(card);
+
+            if (ProjectsWrapPanel.Children.Count == 0)
+            {
+                RecentProjectsControlVM.IsNoneProjectBlockVisible = true;
+                RecentProjectsControlVM.IsProjectBlockVisible = false;
             }
         }
 
@@ -417,15 +455,7 @@ namespace NessStudio.Components.RecentProjects
 
             if (ok)
             {
-                if (ProjectsWrapPanel.Children.Contains(card))
-                    ProjectsWrapPanel.Children.Remove(card);
-
-                if (ProjectsWrapPanel.Children.Count == 0)
-                {
-                    RecentProjectsControlVM.IsNoneProjectBlockVisible = true;
-                    RecentProjectsControlVM.IsProjectBlockVisible = false;
-                    ProjectsWrapPanel.Visibility = Visibility.Collapsed;
-                }
+                RemoveProjectCard(card);
             }
             else
             {

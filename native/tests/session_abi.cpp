@@ -13,6 +13,7 @@ static nss_json_v1 control(const std::string& value){return {sizeof(nss_json_v1)
 struct Engine{nss_engine* value{};Engine(){auto text=std::string{"{\"version\":1}"};auto c=control(text);auto e=error();check(nss_engine_create(&c,&value,&e)==0,"engine create");}~Engine(){nss_engine_release(value);}};
 struct Session{
     nss_session* value{};uint64_t sequence{},object{};std::vector<nss_event_v1> observed;
+    explicit Session(nss_session* owned):value(owned){object=snapshot()["objectId"].get<uint64_t>();}
     Session(Engine& engine,Json options=Json::object()){
         auto text=Json{{"version",1},{"testFixture",options}}.dump();auto c=control(text);auto e=error();
         check(nss_session_create(engine.value,&c,&value,&e)==0,"session create");object=snapshot()["objectId"].get<uint64_t>();
@@ -79,8 +80,23 @@ int main(int argc,char** argv){
                 for(int i=0;i<64;++i){
                     {Session s(engine,{{"prepareDelayMs",20}});check(s.object>previous,"session id reused");previous=s.object;s.send(1);}
                     const auto end=std::chrono::steady_clock::now()+std::chrono::seconds(2);
-                    for(;;){auto text=std::string{"{\"version\":1,\"testFixture\":{}}"};auto c=control(text);auto e=error();nss_session* next{};const auto result=nss_session_create(engine.value,&c,&next,&e);if(result==0){nss_session_release(next);break;}check(result==NSS_E_BUSY&&std::chrono::steady_clock::now()<end,"abandoned session did not release engine budget");std::this_thread::sleep_for(std::chrono::milliseconds(2));}
-                    std::this_thread::sleep_for(std::chrono::milliseconds(3));
+                    for(;;){
+                        auto text=std::string{"{\"version\":1,\"testFixture\":{}}"};auto c=control(text);auto e=error();nss_session* next{};
+                        const auto result=nss_session_create(engine.value,&c,&next,&e);
+                        if(result==0){
+                            // This probe proves that the abandoned session released
+                            // its budget. Close the probe itself before the next
+                            // iteration; release is asynchronous and a 3 ms sleep
+                            // cannot establish that ownership has been returned.
+                            Session probe(next);
+                            check(probe.wait(probe.send(NSS_COMMAND_STOP)).status==NSS_E_CANCELLED,
+                                  "Unstarted availability probe did not close cleanly");
+                            probe.cleanup();
+                            break;
+                        }
+                        check(result==NSS_E_BUSY&&std::chrono::steady_clock::now()<end,"abandoned session did not release engine budget");
+                        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                    }
                 }
                 report["abandoned_during_prepare"]=64;
             }else throw std::invalid_argument("unknown session test scope");

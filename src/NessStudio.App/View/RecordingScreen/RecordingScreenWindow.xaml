@@ -12,10 +12,10 @@
         WindowStartupLocation="CenterScreen"
         Background="#171A1D"
         Title="Ness Studio Recorder"
-        Height="300"
+        Height="{Binding RecorderWindowHeight, Mode=OneWay}"
         Width="740"
-        MinHeight="300"
-        MaxHeight="300"
+        MinHeight="{Binding RecorderWindowHeight, Mode=OneWay}"
+        MaxHeight="{Binding RecorderWindowHeight, Mode=OneWay}"
         MinWidth="740"
         MaxWidth="740">
 
@@ -52,9 +52,9 @@
                                 SnapsToDevicePixels="True">
                             <Grid>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="7" />
+                                    <ColumnDefinition x:Name="MarkerColumn" Width="7" />
                                     <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="18" />
+                                    <ColumnDefinition x:Name="ArrowColumn" Width="18" />
                                 </Grid.ColumnDefinitions>
 
                                 <Border x:Name="SelectedMarker"
@@ -65,7 +65,7 @@
                                         Background="{StaticResource RecorderAccentBrush}"
                                         Visibility="Collapsed" />
 
-                                <ContentPresenter Grid.Column="1"
+                                <ContentPresenter x:Name="MenuHeader" Grid.Column="1"
                                                   ContentSource="Header"
                                                   Margin="8,0,10,0"
                                                   VerticalAlignment="Center"
@@ -100,7 +100,11 @@
 
                         <ControlTemplate.Triggers>
                             <Trigger Property="Role" Value="TopLevelHeader">
-                                <Setter Property="MinWidth" Value="90" />
+                                <Setter Property="MinWidth" Value="0" />
+                                <Setter Property="FontSize" Value="13" />
+                                <Setter TargetName="MarkerColumn" Property="Width" Value="0" />
+                                <Setter TargetName="ArrowColumn" Property="Width" Value="0" />
+                                <Setter TargetName="MenuHeader" Property="Margin" Value="12,0" />
                                 <Setter TargetName="SubmenuArrow" Property="Visibility" Value="Collapsed" />
                             </Trigger>
 
@@ -314,13 +318,35 @@
             </Setter>
         </Style>
 
+        <Style x:Key="RecorderAudioMeterStyle" TargetType="{x:Type ProgressBar}">
+            <Setter Property="Minimum" Value="0" />
+            <Setter Property="Maximum" Value="100" />
+            <Setter Property="Height" Value="5" />
+            <Setter Property="Margin" Value="0,3,0,0" />
+            <Setter Property="Foreground" Value="{StaticResource RecorderAccentBrush}" />
+            <Setter Property="Background" Value="{StaticResource RecorderSoftBorderBrush}" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ProgressBar}">
+                        <Grid x:Name="PART_Track" SnapsToDevicePixels="True" ClipToBounds="True">
+                            <Border Background="{TemplateBinding Background}" CornerRadius="2" />
+                            <Border x:Name="PART_Indicator" Background="{TemplateBinding Foreground}"
+                                    HorizontalAlignment="Left" CornerRadius="2" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="RecorderTransportButtonStyle" TargetType="{x:Type Button}">
             <Setter Property="Background" Value="#202427" />
             <Setter Property="BorderBrush" Value="#30363B" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Width" Value="112" />
-            <Setter Property="Height" Value="112" />
+            <Setter Property="Width" Value="104" />
+            <Setter Property="Height" Value="104" />
             <Setter Property="Padding" Value="14" />
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Template">
@@ -379,8 +405,7 @@
 
                 <MenuItem Header="Settings"
                           IsEnabled="{Binding CanStartRecording}">
-                    <MenuItem Header="Recording mode" ItemsSource="{Binding ExecutionModeOptions}"
-                              ToolTip="Automatic selects an available recording engine. CPU requires software capture and encoding. GPU requires hardware acceleration.">
+                    <MenuItem Header="Recording mode" ItemsSource="{Binding ExecutionModeOptions}">
                         <MenuItem.ItemContainerStyle>
                             <Style TargetType="{x:Type MenuItem}" BasedOn="{StaticResource SettingsLeafMenuItemStyle}">
                                 <Setter Property="Header" Value="{Binding Label}" />
@@ -436,7 +461,7 @@
 
             <Border Grid.Column="0"
                     Style="{StaticResource RecorderCardStyle}">
-                <Grid>
+                <Grid VerticalAlignment="Center">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="8" />
@@ -534,7 +559,7 @@
                     IsEnabled="{Binding IsEditEnabled}"
                     IsHitTestVisible="{Binding IsEditEnabled}"
                     Margin="6,0,0,0">
-                <Grid>
+                <Grid VerticalAlignment="Center">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="8" />
@@ -629,13 +654,18 @@
                                    Margin="0,0,8,0"
                                    VerticalAlignment="Center" />
 
-                            <Slider Minimum="0"
+                            <StackPanel>
+                                <Slider Minimum="0"
                                     Maximum="100"
                                     x:Name="sldMicVolume"
                                     Value="{Binding MicrophoneLevel, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                     ToolTip="{Binding MicrophoneLevel, StringFormat='Recording level: {0:0}%'}"
                                     IsEnabled="{Binding CanEditMicrophoneLevel}"
                                     Height="22" />
+                                <ProgressBar x:Name="MicrophoneSignalMeter" Style="{StaticResource RecorderAudioMeterStyle}"
+                                             Value="{Binding MicrophoneSignalLevel, Mode=OneWay}"
+                                             AutomationProperties.Name="Microphone input level" />
+                            </StackPanel>
                         </DockPanel>
 
                         <Grid>
@@ -682,13 +712,18 @@
                                    RenderOptions.BitmapScalingMode="HighQuality"
                                    VerticalAlignment="Center" />
 
-                            <Slider Minimum="0"
+                            <StackPanel>
+                                <Slider Minimum="0"
                                     Maximum="100"
                                     x:Name="sldSystemVolume"
                                     Value="{Binding SystemAudioLevel, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                     ToolTip="{Binding SystemAudioLevel, StringFormat='Recording level: {0:0}%'}"
                                     IsEnabled="{Binding CanEditSystemAudioLevel}"
                                     Height="22" />
+                                <ProgressBar x:Name="SystemAudioSignalMeter" Style="{StaticResource RecorderAudioMeterStyle}"
+                                             Value="{Binding SystemAudioSignalLevel, Mode=OneWay}"
+                                             AutomationProperties.Name="System audio input level" />
+                            </StackPanel>
                         </DockPanel>
 
                         <WrapPanel VerticalAlignment="Center">
@@ -714,20 +749,16 @@
                 </StackPanel>
             </Border>
 
-            <Border Grid.Column="3"
-                    Style="{StaticResource RecorderCardStyle}"
-                    IsEnabled="{Binding IsEditEnabled}"
-                    IsHitTestVisible="{Binding IsEditEnabled}"
-                    Margin="6,0,0,0"
-                    HorizontalAlignment="Stretch"
-                    VerticalAlignment="Stretch">
-                <Grid>
+            <Grid Grid.Column="3"
+                  IsEnabled="{Binding IsEditEnabled}"
+                  IsHitTestVisible="{Binding IsEditEnabled}"
+                  Margin="6,0,0,0">
                     <Button Background="Transparent"
                             Command="{Binding PlayRecodingCommand}"
                             BorderThickness="0"
                             Cursor="Hand"
-                            Width="120"
-                            Height="120"
+                            Width="130"
+                            Height="130"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center">
                         <StackPanel>
@@ -746,23 +777,24 @@
                                        VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
-                </Grid>
-            </Border>
+            </Grid>
         </Grid>
 
         <Grid Grid.Row="1"
               x:Name="GridRecord"
+              Margin="18,12"
               Visibility="{Binding IsRecordingPanelVisible, Converter={StaticResource BoolToVis}}"
               Background="#171A1D"
               IsEnabled="{Binding IsEditEnabled}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="120" />
-                <ColumnDefinition Width="120" />
+                <ColumnDefinition Width="20" />
+                <ColumnDefinition Width="104" />
+                <ColumnDefinition Width="20" />
+                <ColumnDefinition Width="104" />
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0"
-                    Margin="18"
                     CornerRadius="16"
                     Background="#23272A"
                     BorderBrush="#30363B"
@@ -770,7 +802,7 @@
                     Padding="0">
                 <Grid>
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="42" />
+                        <RowDefinition Height="32" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
@@ -781,7 +813,7 @@
                             CornerRadius="16,16,0,0">
                         <TextBlock Text="Duration Recording"
                                    FontFamily="Arial"
-                                   FontSize="18"
+                                   FontSize="14"
                                    Foreground="#CCD5D7"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center" />
@@ -795,20 +827,21 @@
                                    Foreground="#CCD5D7"
                                    FontFamily="Arial"
                                    FontWeight="Bold"
-                                   FontSize="46"
+                                   FontSize="40"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center" />
                     </Border>
                 </Grid>
             </Border>
 
-            <StackPanel Grid.Column="1"
+            <StackPanel Grid.Column="2"
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center">
                 <Button Style="{StaticResource RecorderTransportButtonStyle}"
                         Command="{Binding PauseRecordingCommand}">
                     <StackPanel>
                         <Image Source="{Binding ButtonPlayPauseIcon}"
+                               Width="42" Height="42"
                                Stretch="Uniform" />
 
                         <TextBlock TextAlignment="Center"
@@ -821,13 +854,14 @@
                 </Button>
             </StackPanel>
 
-            <StackPanel Grid.Column="2"
+            <StackPanel Grid.Column="4"
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center">
                 <Button Style="{StaticResource RecorderTransportButtonStyle}"
                         Command="{Binding StopRecordingCommand}">
                     <StackPanel>
                         <Image Source="/Assets/Images/stop-icon.png"
+                               Width="42" Height="42"
                                Stretch="Uniform" />
 
                         <TextBlock TextAlignment="Center"
@@ -840,8 +874,10 @@
                 </Button>
             </StackPanel>
         </Grid>
-        <Border Grid.Row="2" Padding="14,4,14,7" Background="#202427">
-            <TextBlock x:Name="DiskSpaceStatusText" Text="{Binding DiskSpaceMessage}" FontSize="11" TextWrapping="Wrap">
+        <Border Grid.Row="2" Padding="14,6,14,7" Background="#202427">
+            <TextBlock x:Name="DiskSpaceStatusText" Text="{Binding FooterStatusMessage}" FontSize="11"
+                       HorizontalAlignment="Stretch" TextAlignment="Right" TextWrapping="NoWrap"
+                       TextTrimming="CharacterEllipsis" ToolTip="{Binding DiskSpaceMessage}">
                 <TextBlock.Style>
                     <Style TargetType="TextBlock">
                         <Setter Property="Foreground" Value="#AAB4B8" />

@@ -42,7 +42,7 @@ internal static partial class Program
         Case("wrong-size-relocation-rejected",()=>{string folder=Folder("wrong relocation");var m=V3(folder);ProjectManifestStore.WriteAliases(folder,m);string wrong=Path.Combine(folder,"wrong.mkv");File.WriteAllText(wrong,"bad");Reject<InvalidDataException>(()=>ProjectManifestStore.RelocateAsset(folder,"screen",wrong));});
         Case("relative-paths-survive-project-move",()=>{string folder=Folder("original location");var m=V3(folder);ProjectManifestStore.WriteAliases(folder,m);string moved=Path.Combine(_root,"moved project");Directory.Move(folder,moved);Check(ProjectManifestStore.Read(moved).MissingAssets.Count==0,"Historical BaseDir was treated as a dependency");});
         Case("duplicate-case-version-fields-rejected",()=>Reject<InvalidDataException>(()=>ProjectManifestStore.Parse(Encoding.UTF8.GetBytes("{\"Version\":2,\"version\":9}"))));
-        Case("byte-and-depth-budgets",()=>{Reject<InvalidDataException>(()=>ProjectManifestStore.Parse(new byte[1048577]));Reject<JsonException>(()=>ProjectManifestStore.Parse(Encoding.UTF8.GetBytes("{\"Version\":2,\"extra\":"+new string('[',70)+"0"+new string(']',70)+"}")));});
+        Case("byte-and-depth-budgets",()=>{Reject<InvalidDataException>(()=>ProjectManifestStore.Parse(new byte[8*1024*1024+1]));Reject<JsonException>(()=>ProjectManifestStore.Parse(Encoding.UTF8.GetBytes("{\"Version\":2,\"extra\":"+new string('[',70)+"0"+new string(']',70)+"}")));});
         Case("duplicate-asset-roles-rejected",()=>{string folder=Folder("duplicate roles");var m=V3(folder);m.Assets.Add(m.Assets[0]);Reject<InvalidDataException>(()=>ProjectManifestStore.Parse(Json(m)));});
         Case("unfinalized-assets-rejected",()=>{string folder=Folder("partial role");var m=V3(folder);m.Assets[0].Finalized=false;Reject<InvalidDataException>(()=>ProjectManifestStore.Parse(Json(m)));});
         Case("future-session-schema-not-project",()=>Reject<UnsupportedProjectSchemaException>(()=>ProjectManifestStore.Parse(Encoding.UTF8.GetBytes("{\"version\":1,\"kind\":\"native-session\"}"))));
@@ -77,9 +77,30 @@ internal static partial class Program
         Case("schema-settings-appversion-and-source-copy-preserved",()=>{Check(Schema()==schemaBefore&&connection.Table<SettingsModel>().Single().ApplicationIdentifier=="keep-id"&&connection.Table<NessStudio.Models.AppVersion>().Single().Version==2.0&&Hash(baseline)==baselineHash,"Registration changed schema/settings/version or baseline");});
     }
     private sealed class SchemaRow {public string name{get;set;}=string.Empty;public string sql{get;set;}=string.Empty;}
+    private static void RecordingLevels()
+    {
+        Case("recording-level-preferences-migrate-and-preserve-selected-gains", () =>
+        {
+            var path = Path.Combine(Folder("recording levels"), "preferences.json");
+            File.WriteAllText(path, "{\"TimerSeconds\":5,\"RecordingFps\":30}");
+            var service = new RecordingPreferencesService(() => path);
+            var levels = service.Load();
+            Check(levels.MicrophoneLevel == 100 && levels.SystemAudioLevel == 100 && levels.TimerSeconds == 5,
+                "Older preferences changed the captured audio level");
+            levels.MicrophoneLevel = 25;
+            levels.SystemAudioLevel = 0;
+            service.Save(levels);
+            var restored = service.Load();
+            Check(restored.MicrophoneLevel == 25 && restored.SystemAudioLevel == 0 && restored.TimerSeconds == 5,
+                "Selected levels were not retained independently of existing preferences");
+            Check(RecordingPreferencesService.NormalizeLevel(double.NaN) == 100 &&
+                RecordingPreferencesService.NormalizeLevel(-1) == 0 && RecordingPreferencesService.NormalizeLevel(101) == 100,
+                "Invalid preference levels escaped the supported recording gain range");
+        });
+    }
     public static async Task<int> Main(string[] args)
     {
-        try{if(args is not [var folder])return 2;_root=Path.GetFullPath(folder);if(Directory.Exists(_root))throw new IOException("Preserve existing project contract fixture; choose a fresh directory.");Directory.CreateDirectory(_root);Manifests();Database();DatabaseRuntime();await Recovery();Console.WriteLine(JsonSerializer.Serialize(new{status="PASS",cases=Cases.Count,names=Cases,scope="Versioned project/encrypted fixtures, pinned managed/native database runtime, bounded crash discovery, owner guards and preserved/truncated media diagnostics; metadata eligibility is not a successful media recovery claim"}));return 0;}
+        try{if(args is not [var folder])return 2;_root=Path.GetFullPath(folder);if(Directory.Exists(_root))throw new IOException("Preserve existing project contract fixture; choose a fresh directory.");Directory.CreateDirectory(_root);EnglishErrorCases();RecordingLevels();RecordingStorageCases();Manifests();ProjectFilesCases();SingleMetadataCases();Database();DatabaseRuntime();await Recovery();Console.WriteLine(JsonSerializer.Serialize(new{status="PASS",cases=Cases.Count,names=Cases,scope="Versioned project/encrypted fixtures, pinned managed/native database runtime, single-file recording metadata, bounded crash discovery, owner guards and preserved/truncated media diagnostics; metadata eligibility is not a successful media recovery claim"}));return 0;}
         catch(Exception error){Console.Error.WriteLine(error);return 1;}
     }
 }

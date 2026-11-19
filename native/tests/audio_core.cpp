@@ -71,10 +71,54 @@ static nss::Json handoff_quality() {
     causal = e.code == NSS_E_IO && e.stage == NSS_STAGE_STORAGE && e.native == 1234;
   }
   check(causal, "Audio worker failure lost its causal stage/native code");
+  PacketQueue burst(48000, 8, PacketQueue::recording_pending_ms);
+  std::binary_semaphore began(0), resume(0);
+  uint64_t burst_received{};
+  PacketProcessor stalled(burst, 480 * 8,
+      [&](const std::vector<uint8_t> &bytes, const PacketQueue::Packet &input) {
+        if (!burst_received) { began.release(); resume.acquire(); }
+        check(input.position == burst_received * 480 && input.qpc == 1000000 + burst_received * 100000,
+              "Storage backlog changed source timestamps or position");
+        check(bytes.size() == 480 * 8 &&
+              std::all_of(bytes.begin(), bytes.end(), [&](uint8_t byte) { return byte == uint8_t(burst_received); }),
+              "Storage backlog changed or reused retained PCM");
+        ++burst_received;
+      });
+  struct ResumeOnExit {
+    std::binary_semaphore &signal;
+    bool pending = true;
+    void release() { if (pending) { pending = false; signal.release(); } }
+    ~ResumeOnExit() { release(); }
+  } unblock{resume};
+  // Deterministically retain 1.5 seconds behind a blocked file consumer. This
+  // exceeds the old 500ms limit while remaining inside the recording budget.
+  std::vector<uint8_t> burst_bytes(480 * 8);
+  for (uint64_t i = 0; i < 151; ++i) {
+    std::fill(burst_bytes.begin(), burst_bytes.end(), uint8_t(i));
+    burst.push(burst_bytes.data(), {480, 0, i * 480, 1000000 + i * 100000});
+    if (!i) began.acquire();
+    std::fill(burst_bytes.begin(), burst_bytes.end(), uint8_t{0xCE});
+  }
+  check(burst.stats().queued_frames == 150 * 480 &&
+        burst.stats().peak_frames <= uint64_t(48000) * PacketQueue::recording_pending_ms / 1000,
+        "Storage burst was not retained within its bounded allocation");
+  unblock.release(); stalled.drain();
+  check(burst_received == 151 && burst.stats().queued_frames == 0,
+        "Storage burst did not drain every original packet");
+  PacketQueue persistent(48000, 8, PacketQueue::recording_pending_ms);
+  for (uint64_t i = 0; i < 500; ++i) persistent.push(burst_bytes.data(), {480, 0, i * 480});
+  bool persistent_rejected{};
+  try { persistent.push(burst_bytes.data(), {480, 0, 500 * 480}); }
+  catch (const nss::capture::Error &e) { persistent_rejected = e.code == NSS_E_BACKPRESSURE; }
+  check(persistent_rejected && persistent.stats().queued_frames == 48000 * 5,
+        "Persistent storage overload became unbounded or evicted retained packets");
   return {{"status", "PASS"}, {"packetsVerified", received}, {"borrowedInputOverwritten", true},
           {"ringWrapVerified", true}, {"silenceFlagsPreserved", true},
           {"boundedOverloadWithoutEviction", true}, {"causalFailurePropagated", true},
-          {"queueBytes", queue.stats().bytes}, {"peakQueuedFrames", queue.stats().peak_frames}};
+          {"queueBytes", queue.stats().bytes}, {"peakQueuedFrames", queue.stats().peak_frames},
+          {"storageBurstOriginalPacketsVerified", burst_received}, {"storageBurstSeconds", 1.5},
+          {"recordingQueueBytes", burst.stats().bytes}, {"recordingBudgetMs", PacketQueue::recording_pending_ms},
+          {"persistentOverloadStillRejected", true}};
 }
 static nss::Json kernel_quality() {
   double maximum_coefficient_error{}, maximum_normalized_l1{},

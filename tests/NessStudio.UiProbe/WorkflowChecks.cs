@@ -56,6 +56,11 @@ internal static partial class Program
         Results.Add(new { name = "about-log-policy-persisted", backgroundWritesSuppressed = 100, separateErrorLog = true });
 
         var document = NessStudio.Recording.ProjectManifestStore.Read(source);
+        Check(document.Manifest.Metadata is not null && Directory.GetFiles(source,"*.json").Select(Path.GetFileName).SequenceEqual(["manifest.json"]),
+            "The imported recording does not use one consolidated metadata file.");
+        var imported = await ProjectIngestService.ProcessAsync(source);
+        Check(imported.ProjectFolderPath==source && File.Exists(document.AuthorityPath),
+            "Import did not register the relocated consolidated project.");
         var model = new ProjectsModel { Title = "Export verification", ProjectFolderPath = source,
             ProjectFilePath = document.AuthorityPath, UpdatedAt = DateTime.Now, FileSizeBytes = 59_779_318,
             ThumbnailPath = Path.Combine(source, "preview.png") };
@@ -138,6 +143,10 @@ internal static partial class Program
         export.UpdateLayout();
         Screenshot(export, "export-completed");
         export.Close();
+        Check(Directory.GetFiles(source,"*.json").Select(Path.GetFileName).SequenceEqual(["manifest.json"]) &&
+              !File.Exists(Path.Combine(source,"final.mkv")) && !File.Exists(Path.Combine(source,"webcam.mp4")),
+              "Explicit exports modified the recording source layout.");
+        Results.Add(new { name = "single-json-relocated-import-and-explicit-export", source, projectId = imported.ProjectId });
         DebugLog.Flush();
         Check(new FileInfo(DebugLog.GetPath()).Length == disabledLength, "Normal export operations wrote disabled debug logs.");
         Results.Add(new { name = "separate-export-opens-folder-after-success", directory = tracks, files = expected });

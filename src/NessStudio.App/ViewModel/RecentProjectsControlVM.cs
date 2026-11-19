@@ -2,6 +2,7 @@ using MaterialDesignThemes.Wpf;
 using NessStudio.Components.RecentProjects;
 using NessStudio.Models;
 using NessStudio.ViewModel.Commands;
+using NessStudio.ViewModel.Helpers;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -104,7 +105,7 @@ namespace NessStudio.ViewModel
                     MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
-        public async Task<bool> DeleteProjectAsync(ProjectsModel model)
+        public bool RemoveProjectFromLibrary(ProjectsModel model)
         {
             try
             {
@@ -114,8 +115,21 @@ namespace NessStudio.ViewModel
                     conn.CreateTable<ProjectsModel>();
                     conn.Delete(model);
                 });
+                return true;
+            }
+            catch (Exception error)
+            {
+                DebugLog.Write("[RecentProjects] RemoveProjectFromLibrary ERROR:\n" + UserError.Details(error));
+                return false;
+            }
+        }
+        public async Task<bool> DeleteProjectAsync(ProjectsModel model)
+        {
+            try
+            {
+                if (!RemoveProjectFromLibrary(model)) return false;
                 string folderToDelete = model?.ProjectFolderPath;
-                if (string.IsNullOrWhiteSpace(folderToDelete) || !Directory.Exists(folderToDelete))
+                if (string.IsNullOrWhiteSpace(folderToDelete))
                 {
                     var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
                     folderToDelete = System.IO.Path.Combine(docs, "NessStudio", "Recordings", SanitizeFolderName(model?.Title));

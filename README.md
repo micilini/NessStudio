@@ -46,6 +46,7 @@ It is ideal for tutorials, classes, onboarding, technical support, product demos
 - **Native encoding and muxing:** [NessMuxer](https://github.com/micilini/NessMuxer) is statically linked into the engine, with Intel Quick Sync, NVIDIA NVENC, AMD AMF, and CPU x264 routes.
 - **Independent capture channels:** screen, webcam, microphone, and system audio can be recorded alone or together.
 - **Draw Area support:** capture a full monitor or a custom screen region, with cursor capture.
+- **Live region preview:** Draw Area shows the selected physical-pixel crop in the recorder, with live updates on either monitor and CPU/GPU preview paths.
 - **Draw Area overlay:** custom-region recordings display a visual capture overlay while recording.
 - **Live previews and scenes:** independent screen/webcam previews, composed scenes, and optional `program.mkv` output.
 - **Pause / Resume:** pause and continue active sessions through a shared native session clock.
@@ -79,12 +80,11 @@ A recording session may contain one or more of these tracks:
 | Source | Output |
 |---|---|
 | Screen | `screen.mkv` |
-| Webcam | `webcam.mkv`, also remuxed to `webcam.mp4` during finalization |
+| Webcam | `webcam.mkv` |
 | Microphone | `mic.wav` |
 | System audio | `system.wav` |
 | Composed scene | `program.mkv` when scene recording is enabled |
-| Finalized audio/video output | `final.mkv` when audio sources are included |
-| Metadata | `manifest.json`, `session.manifest.json`, and native track/session records |
+| Metadata | One `manifest.json`, including track information, native diagnostics and project bookkeeping |
 | Preview | `preview.png` when a video track exists |
 
 Files depend on the selected sources and recording mode. Native screen and camera tracks use Matroska, and audio tracks use WAV. Audio-only sessions are supported; they do not generate a visual preview.
@@ -163,8 +163,7 @@ WPF application (.NET 10)
            ├─ Shared session clock, commands/events, and recovery journals
            └─ Native media jobs → FFmpeg finalization, thumbnails, and exports
 
-Project manifests  → manifest.json + session.manifest.json
-Native metadata    → track manifests + recording-native.json + operation journals
+Project metadata   → one manifest.json containing track metadata and native diagnostics
 Project library    → preview.png + local SQLCipher database
 ```
 
@@ -264,25 +263,11 @@ Example of a finalized recording with all four sources and optional exports:
 ```text
 recording/
 ├─ screen.mkv
-├─ screen.mkv.manifest.json
-├─ screen.mkv.session-<id>.json
 ├─ webcam.mkv
-├─ webcam.mkv.manifest.json
-├─ webcam.mp4
-├─ webcam.mp4.export.json
 ├─ mic.wav
 ├─ system.wav
-├─ final.mkv
-├─ final.mkv.export.json
 ├─ manifest.json
-├─ session.manifest.json
-├─ recording-native.json
-├─ native-camera-export.json
-├─ native-export.json
-├─ project-recovery.json
-├─ project-registration.json
 ├─ preview.png
-├─ preview.png.thumbnail.json
 └─ Exports/
    ├─ recording_export.mp4
    ├─ recording_export.mp4.export.json
@@ -292,7 +277,7 @@ recording/
       └─ audio_mix.wav
 ```
 
-Scene modes can also write `program.mkv` and `program.mkv.manifest.json`; audio-only sessions use `audio.native.json`. Native jobs add `*.job-<id>.json` journals, and each exported track has its own `.export.json` receipt. IDs and files vary with the selected sources, recording mode, and completed operations.
+Scene modes can also retain a native `program.mkv`. Native track manifests, diagnostics, completed capture/thumbnail journals and project bookkeeping are embedded in the recording's `manifest.json` after capture finishes. Native control journals are kept during capture for crash recovery, and older layouts remain readable. Explicit exports write their own outputs and receipts under the selected export destination.
 
 Interrupted operations can leave `.pending` or partial files and `recording-incomplete.json`. Recovery may also write `recovery-result.json` and a `recovered-*` directory. These records preserve evidence and original assets; unfinished media is not automatically certified as recovered.
 
@@ -311,6 +296,22 @@ New recording workspaces are stored in `%LOCALAPPDATA%\NessStudio\Recordings`. D
 Existing projects retain their original locations, and recovery also checks the former `Documents\NessStudio\Recordings` folder. Recovery copies finalized, revalidated assets into a new project; it does not certify unfinished MKV/WAV tails.
 
 The application and capture engine currently target **Windows x64**. Hardware encoding requires a compatible device and driver; a GPU brand alone does not guarantee encoder availability. Linux and macOS capture backends are not implemented in libnessstudio. NessMuxer is a separate project with its own platform support. A successful build does not certify every camera, driver, GPU, or recording duration.
+
+GPU mode selects the encoder for the actual capture adapter: NVIDIA NVENC, Intel Quick Sync, or AMD AMF. The H.264 NVENC backend uses the released API 12.0 ABI, accepts newer compatible drivers, and probes the requested configuration before recording. Quick Sync uses oneVPL API 2.0 internal surfaces; the bundled dispatcher/header release is not a minimum driver version. Automatic mode may fall back when a capability is unavailable during preparation; device loss and failures during an active recording remain errors. Native and managed application messages use English. Interrupted-session diagnostics remain on disk without a persistent warning panel on the home screen.
+
+Application-owned message dialogs also use English action buttons, including on localized Windows installations. Driver discontinuity flags with continuous, valid audio positions/timestamps are recorded in diagnostics without altering the PCM or terminating the session. With continuous device sample positions, packet timestamp jitter within 70 ms is smoothed onto the sample timeline; observations differing by more than 2 ms are excluded from clock-rate estimation. Raw packet timestamps remain in diagnostics. Actual unexplained sample gaps, clock differences beyond the smoothing budget and uncertain discontinuities still fail explicitly.
+
+Audio rate estimates can fluctuate after small driver timestamp offsets. Resampler correction remains limited to +/-200 ppm and slewed at no more than 20 ppm per second; an estimate beyond that correction limit is diagnostic and does not by itself terminate continuous audio. The independent checks for missing samples and clock divergence still apply.
+
+Audio capture hands owned packets to processing through a preallocated five-second buffer. Physical audio and video writes run on separate storage workers, with bounded queues of 8 MiB per PCM track and 64 MiB per encoded video track. Disk stalls cannot block the capture/encoding producer while that reserve is available. Payloads and timestamps are preserved; finalization drains every admitted write before completing and persistent overload fails explicitly rather than dropping data.
+
+Output files are prepared before the audio-device initialization deadline starts. File and device preparation times are reported separately; failed startup snapshots are preserved in `recording-startup-error.json`.
+
+Interactive finalization waits for accepted writes and actual native cleanup. A slow storage operation does not invalidate the recording merely because 60 seconds have elapsed; the saving window continues showing the elapsed wait. Real storage, device and encoder errors remain explicit. Noninteractive control/probe sessions retain their finite deadline.
+
+Microphone and system-audio recording levels are independent, persisted output gains from 0% to 100%, applied to the recorded PCM without changing Windows device/playback volume. Their default is unity gain (100%), and the controls are locked while recording.
+
+The recorder displays the current user's available space on the output volume. Below 1 GiB it highlights a warning; below 50 MiB it prevents a new recording or requests the normal Stop/Save path, including while paused. Space queries run outside capture and UI work, and query failures are not interpreted as a full disk. Stop/Save closes the original tracks and publishes their metadata; composition and conversion run only through an explicit Export action. This threshold is preventive and cannot reserve space against other processes.
 
 ## Built With
 

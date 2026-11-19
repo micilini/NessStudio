@@ -100,9 +100,11 @@ The CLI supports `version --json`, capture diagnostics, configured recordings an
 
 ## Encoder selection
 
-`Auto` probes direct Quick Sync, NVENC and AMF on the selected D3D11 device, in that order. An unavailable capability allows the next candidate; where policy permits, x264 provides the software fallback. Configuration, allocation and driver errors retain their cause rather than being masked by another backend. Hardware-required mode fails when no compatible hardware encoder is available.
+`Auto` selects the hardware backend for the actual capture adapter: Quick Sync for Intel, NVENC for NVIDIA and AMF for AMD. Where policy permits, an unavailable capability allows x264 software fallback. Configuration, allocation and driver errors retain their cause rather than being masked by an attempt to use a different vendor's backend. Hardware-required mode fails when no compatible hardware encoder is available. The H.264 NVENC backend uses the official API 12.0 ABI and accepts newer compatible drivers; Quick Sync uses oneVPL 2.0 internal surfaces.
 
 `GpuWithSoftwareEncoding` uses GPU capture/processing with x264. `FullSoftware` explicitly selects the CPU route. Capability discovery is based on the actual device/driver and requested format; product family names are insufficient. Native manifests report the route actually selected.
+
+Physical writes use bounded storage workers: 8 MiB per PCM audio track and 64 MiB per encoded video track. Producers copy owned payloads and preserve write offsets/order without waiting on the disk callback. Finalization drains writes before header updates, durability flushes and handle closure. Backpressure and disk errors remain explicit failures; no queued media is silently discarded to sustain capture.
 
 ## Dependencies and licensing
 
