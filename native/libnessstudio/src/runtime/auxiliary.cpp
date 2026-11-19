@@ -169,10 +169,9 @@ public:
           std::filesystem::exists(path(manifest_ + ".pending")))
         throw std::invalid_argument("Audio manifest needs a new absolute path");
       audio_plan_ = audio::validate(request.at("audio"), manifest_);
-      if (std::filesystem::space(output.parent_path()).available <
-          1024ULL * 1024 * 1024 + 60000ULL * 192 * audio_plan_.size())
+      if (std::filesystem::space(output.parent_path()).available < 50ULL * 1024 * 1024)
         throw capture::Error(NSS_E_IO, NSS_STAGE_STORAGE, 0,
-                             "Insufficient space for audio recording reserve");
+                             "Not enough free disk space to start recording; at least 50 MiB are required");
     }
   }
   bool self_paced() const noexcept override { return true; }

@@ -12,7 +12,8 @@ public sealed class NativeRecordingWorkspace(string applicationDirectory, IDiagn
     private readonly SemaphoreSlim _control = new(1, 1);
     private readonly object _gate = new();
     private readonly IDiagnosticLog _log = diagnosticLog ?? NullDiagnosticLog.Instance;
-    private sealed record IdleSelection(MonitorDescriptor? Screen, RecordingCameraOptions? Camera, RecordingExecutionMode Mode)
+    private sealed record IdleSelection(MonitorDescriptor? Screen, RecordingCameraOptions? Camera, RecordingExecutionMode Mode,
+        PhysicalRectangle? Crop = null)
     {
         public bool Gpu => Mode != RecordingExecutionMode.FullSoftware;
     }
@@ -39,7 +40,7 @@ public sealed class NativeRecordingWorkspace(string applicationDirectory, IDiagn
     {
         foreach (var observer in PresentationChanged?.GetInvocationList() ?? [])
             try { ((EventHandler)observer)(this, new PreviewSourceChangedEventArgs(source)); }
-            catch (Exception error) { _log.Write("[NativePreview] Observer: " + error.Message); }
+            catch (Exception error) { _log.Write("[NativePreview] Observer: " + UserError.Message(error)); }
     }
     /// <summary>Attaches only a presentation consumer; the caller never owns source/session shutdown.</summary>
     public NativePreview? Attach(ulong source)
@@ -93,14 +94,15 @@ public sealed class NativeRecordingWorkspace(string applicationDirectory, IDiagn
         throw new NotSupportedException("The selected physical monitor is no longer available.");
     }
     /// <summary>Updates idle source selection. Concurrent requests supersede older requests before opening devices.</summary>
-    public async Task UpdateIdleAsync(MonitorDescriptor? screen, RecordingCameraOptions? camera, RecordingExecutionMode mode)
+    public async Task UpdateIdleAsync(MonitorDescriptor? screen, RecordingCameraOptions? camera, RecordingExecutionMode mode,
+        PhysicalRectangle? crop = null)
     {
         long revision = Interlocked.Increment(ref _revision);
         await _control.WaitAsync().ConfigureAwait(false);
         try
         {
             if (_disposed || _suspended || revision != Volatile.Read(ref _revision)) return;
-            await UpdateSourceAsync(1, screen is null ? null : new(screen, null, mode), mode).ConfigureAwait(false);
+            await UpdateSourceAsync(1, screen is null ? null : new(screen, null, mode, crop), mode).ConfigureAwait(false);
             if (_disposed || _suspended || revision != Volatile.Read(ref _revision)) return;
             await UpdateSourceAsync(2, camera is null ? null : new(null, camera, mode), mode).ConfigureAwait(false);
         }
@@ -122,15 +124,15 @@ public sealed class NativeRecordingWorkspace(string applicationDirectory, IDiagn
             try { opened = await OpenSourceAsync(selection, selection.Gpu).ConfigureAwait(false); }
             catch (NativeEngineException error) when (mode == RecordingExecutionMode.Automatic && error.Stage is 3 or 4 or 5 or 9 && error.ResultCode is -4 or -10)
             {
-                _log.Write($"[NativePreview] Source {id}: GPU unavailable: {error.Message}");
+                _log.Write($"[NativePreview] Source {id}: GPU unavailable: {UserError.Message(error)}");
                 opened = await OpenSourceAsync(selection, false).ConfigureAwait(false);
             }
             lock (_gate) _idleSources[id] = opened;
         }
         catch (Exception error)
         {
-            lock (_gate) _errors[id] = error.Message;
-            _log.Write($"[NativePreview] Source {id}: {error}");
+            lock (_gate) _errors[id] = UserError.Message(error);
+            _log.Write($"[NativePreview] Source {id}: {UserError.Details(error)}");
         }
         Changed(id);
     }
@@ -146,9 +148,16 @@ public sealed class NativeRecordingWorkspace(string applicationDirectory, IDiagn
                 engine = NativeEngine.Open(applicationDirectory, "NessStudio.IdlePreview");
                 var plan = new Dictionary<string, object?> { ["version"] = 1, ["previewOnly"] = true,
                     ["mode"] = gpu ? "RequireGpuResidentHardware" : "FullSoftware" };
-                if (selection.Screen is not null) plan["capture"] = new { version = 1, mode = plan["mode"],
-                    monitor = ResolveMonitor(engine, selection.Screen), fpsNum = 30, fpsDen = 1,
-                    slots = gpu ? 6 : 3, output = new { width = 640, height = 360, oddPolicy = "PadEven" } };
+                if (selection.Screen is not null)
+                {
+                    var capture = new Dictionary<string, object?> { ["version"] = 1, ["mode"] = plan["mode"],
+                        ["monitor"] = ResolveMonitor(engine, selection.Screen), ["fpsNum"] = 30, ["fpsDen"] = 1,
+                        ["slots"] = gpu ? 6 : 3, ["output"] = new { width = 640, height = 360, oddPolicy = "PadEven" } };
+                    if (selection.Crop is { } region)
+                        capture["crop"] = new { x = region.X, y = region.Y, width = region.Width,
+                            height = region.Height, space = "global-physical" };
+                    plan["capture"] = capture;
+                }
                 if (selection.Camera is not null) plan["camera"] = CameraPlan(selection.Camera);
                 session = engine.CreateSession(JsonSerializer.SerializeToElement(plan));
             }).ConfigureAwait(false);
@@ -164,7 +173,7 @@ public sealed class NativeRecordingWorkspace(string applicationDirectory, IDiagn
         catch
         {
             try { if (session is not null) await session.DisposeAsync().ConfigureAwait(false); }
-            catch (Exception error) { _log.Write("[NativePreview] Failed-source cleanup: " + error); }
+            catch (Exception error) { _log.Write("[NativePreview] Failed-source cleanup: " + UserError.Details(error)); }
             finally { engine?.Dispose(); }
             throw;
         }
@@ -182,7 +191,7 @@ public sealed class NativeRecordingWorkspace(string applicationDirectory, IDiagn
         }
         Changed(id);
         try { using var final = await previous.Session.CloseAsync().ConfigureAwait(false); CheckSnapshot(final.RootElement); }
-        catch (Exception error) { _log.Write($"[NativePreview] Source {id} cleanup: {error}"); }
+        catch (Exception error) { _log.Write($"[NativePreview] Source {id} cleanup: {UserError.Details(error)}"); }
         finally
         {
             previous.Engine.Dispose();

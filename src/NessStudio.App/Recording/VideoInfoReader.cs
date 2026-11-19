@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Runtime.InteropServices;
 namespace NessStudio.Recording
@@ -29,7 +29,7 @@ namespace NessStudio.Recording
                 catch (Exception ex)
                 {
                     NessStudio.ViewModel.Helpers.DebugLog.Write(
-                        "[VideoInfoReader] ReadMkvInfoFromEbml failed: " + ex.Message);
+                        "[VideoInfoReader] ReadMkvInfoFromEbml failed: " + UserError.Message(ex));
                     return new VideoInfo { Width = 0, Height = 0, Fps = 30, Duration = TimeSpan.Zero };
                 }
             }

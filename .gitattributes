@@ -1,6 +1,8 @@
 # Preserve the exact pinned upstream bytes across Windows checkouts.
 /native/deps/json/* -text -whitespace
 /native/deps/NessMuxer.source.bundle -text
+/native/deps/nessmuxer-compat.patch -text
+/native/deps/nv-codec-headers/** -text -whitespace
 /native/deps/x264-abi164/** -text
 /native/deps/*.zip -text
 /cmake/sqlcipher/runtime/** -text

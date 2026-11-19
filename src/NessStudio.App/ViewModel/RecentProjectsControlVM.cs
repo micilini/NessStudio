@@ -1,4 +1,4 @@
-﻿using MaterialDesignThemes.Wpf;
+using MaterialDesignThemes.Wpf;
 using NessStudio.Components.RecentProjects;
 using NessStudio.Models;
 using NessStudio.ViewModel.Commands;
@@ -83,7 +83,6 @@ namespace NessStudio.ViewModel
                                .Take(12)
                                .ToList();
                 });
-                await RecentProjectsControl.RefreshRecoveryAsync();
                 if (items == null || items.Count == 0)
                 {
                     IsLoadingProjectBlockVisible = false;
@@ -101,7 +100,7 @@ namespace NessStudio.ViewModel
                 IsLoadingProjectBlockVisible = false;
                 IsNoneProjectBlockVisible = true;
                 IsProjectBlockVisible = false;
-                MessageBox.Show($"Failed to load projects:\n{ex.Message}", "Recent Projects",
+                MessageBox.Show($"Failed to load projects:\n{UserError.Message(ex)}", "Recent Projects",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
@@ -190,9 +189,9 @@ namespace NessStudio.ViewModel
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error when open folder:\n{ex.Message}", "Error",
+                MessageBox.Show($"Unable to open the recording folder:\n{UserError.Message(ex)}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
     }
-}
+}

@@ -4,7 +4,8 @@ using NessStudio.Models;
 namespace NessStudio.Recording.Engines;
 
 /// <summary>Creates the qualified native screen/audio adapter without opening capture sources.</summary>
-public sealed class NativeRecorderEngineFactory(string applicationDirectory, IDiagnosticLog? log = null) : IRecorderEngineFactory
+public sealed class NativeRecorderEngineFactory(string applicationDirectory, IDiagnosticLog? log = null,
+    Func<string, ulong>? availableSpace = null) : IRecorderEngineFactory
 {
     internal static readonly RecordingCapabilities NativeCapabilities = new("libnessstudio", true, true,
         Array.AsReadOnly(new[] { 24, 25, 30, 48, 50, 60 }));
@@ -43,6 +44,6 @@ public sealed class NativeRecorderEngineFactory(string applicationDirectory, IDi
             ThumbnailCaptureOffsetSeconds = request.RuntimeOptions.ThumbnailCaptureOffsetSeconds
         } };
         (log ?? NullDiagnosticLog.Instance).Write($"[RecorderFactory] implementation=libnessstudio requested={request.ExecutionMode} screen={request.Targets.Screen?.DeviceName} camera={request.Targets.WebcamName} audio={request.Targets.AnyAudio}");
-        return new NativeRecordingService(snapshot, Path.GetFullPath(applicationDirectory), log ?? NullDiagnosticLog.Instance);
+        return new NativeRecordingService(snapshot, Path.GetFullPath(applicationDirectory), log ?? NullDiagnosticLog.Instance, availableSpace);
     }
 }

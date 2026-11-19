@@ -199,7 +199,7 @@
             <Grid Margin="34,36,34,34">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" MinHeight="24" />
+                    <RowDefinition Height="24" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="32" />
                     <RowDefinition Height="Auto" />
@@ -253,12 +253,6 @@
                     </Grid>
                 </Border>
 
-                <Border x:Name="RecoveryPanel" Grid.Row="1" Visibility="Collapsed" Background="#1D2124" BorderBrush="#30363B" BorderThickness="1" CornerRadius="16" Padding="18" Margin="0,16,0,16">
-                    <StackPanel>
-                        <TextBlock Text="Interrupted recordings" Foreground="#CCD5D7" FontSize="18" FontWeight="Bold" />
-                        <StackPanel x:Name="RecoveryItemsPanel" Margin="0,10,0,0" />
-                    </StackPanel>
-                </Border>
                 <Grid Grid.Row="2">
                     <StackPanel Visibility="{Binding IsLoadingProjectBlockVisible, Converter={StaticResource BoolToVis}, Mode=OneWay}"
                                 HorizontalAlignment="Center"

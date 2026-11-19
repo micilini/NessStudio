@@ -47,15 +47,15 @@ namespace NessStudio.View.ExportScreen
             }
             catch (Exception ex)
             {
-                ExportStatusTextBlock.Text = "Unable to load recording export data. " + ex.Message;
+                ExportStatusTextBlock.Text = "Unable to load recording export data. " + UserError.Message(ex);
                 if(ex is not UnsupportedProjectSchemaException&&ProjectRecoveryService.IsAvailable(_project.ProjectFolderPath))
                 {
                     TrackListPanel.Children.Clear();var recover=new Button{Content="Recover finalized assets",Margin=new Thickness(0,8,0,0)};
-                    recover.Click+=(_,_)=>{try{ProjectRecoveryService.Recover(_project.ProjectFolderPath);ExportScreenWindow_Loaded(this,new RoutedEventArgs());}catch(Exception error){ExportStatusTextBlock.Text=error.Message;}};
+                    recover.Click+=(_,_)=>{try{ProjectRecoveryService.Recover(_project.ProjectFolderPath);ExportScreenWindow_Loaded(this,new RoutedEventArgs());}catch(Exception error){ExportStatusTextBlock.Text=UserError.Message(error);}};
                     TrackListPanel.Children.Add(recover);return;
                 }
                 MessageBox.Show(
-                    "Unable to load recording export data.\n\n" + ex.Message,
+                    "Unable to load recording export data.\n\n" + UserError.Message(ex),
                     "Export Recording",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
@@ -143,14 +143,14 @@ namespace NessStudio.View.ExportScreen
                         var dialog=new OpenFileDialog{Title="Locate "+missing.Role+" asset",CheckFileExists=true,FileName=Path.GetFileName(missing.File)};
                         if(dialog.ShowDialog(this)!=true)return;
                         try{ProjectManifestStore.RelocateAsset(_sessionInfo.ProjectFolder,missing.Id,dialog.FileName);_sessionInfo=ExportService.LoadSessionInfo(_sessionInfo.ProjectFolder);ConfigureInitialOptions();RenderDetectedTracks();UpdateSummary();}
-                        catch(Exception error){ExportStatusTextBlock.Text=error.Message;}
+                        catch(Exception error){ExportStatusTextBlock.Text=UserError.Message(error);}
                     };TrackListPanel.Children.Add(locate);
                 }
                 if(document.Diagnostics.Any())
                 {
                     ExportStatusTextBlock.Text=string.Join(Environment.NewLine,document.Diagnostics);
                     var repair=new Button{Content="Repair manifest aliases",Margin=new Thickness(0,4,0,0)};
-                    repair.Click+=(_,_)=>{try{ProjectManifestStore.RepairAliases(_sessionInfo.ProjectFolder);_sessionInfo=ExportService.LoadSessionInfo(_sessionInfo.ProjectFolder);RenderDetectedTracks();ExportStatusTextBlock.Text="Manifest aliases repaired. Original copies were preserved.";}catch(Exception error){ExportStatusTextBlock.Text=error.Message;}};
+                    repair.Click+=(_,_)=>{try{ProjectManifestStore.RepairAliases(_sessionInfo.ProjectFolder);_sessionInfo=ExportService.LoadSessionInfo(_sessionInfo.ProjectFolder);RenderDetectedTracks();ExportStatusTextBlock.Text="Manifest aliases repaired. Original copies were preserved.";}catch(Exception error){ExportStatusTextBlock.Text=UserError.Message(error);}};
                     TrackListPanel.Children.Add(repair);
                 }
             }
@@ -352,8 +352,8 @@ namespace NessStudio.View.ExportScreen
             }
             catch (Exception error)
             {
-                DebugLog.WriteError("[ExportScreen] Open output folder: " + error);
-                MessageBox.Show("Unable to open the output folder.\n\n" + error.Message,
+                DebugLog.WriteError("[ExportScreen] Open output folder: " + UserError.Details(error));
+                MessageBox.Show("Unable to open the output folder.\n\n" + UserError.Message(error),
                     "Export Recording", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
@@ -404,9 +404,9 @@ namespace NessStudio.View.ExportScreen
             }
             catch (Exception ex)
             {
-                DebugLog.WriteError("[ExportScreen] export ERROR:\n" + ex);
+                DebugLog.WriteError("[ExportScreen] export ERROR:\n" + UserError.Details(ex));
                 ExportStatusTextBlock.Text = "Export failed.";
-                MessageBox.Show("Export failed.\n\n" + ex.Message, "Export Recording", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show("Export failed.\n\n" + UserError.Message(ex), "Export Recording", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
             {
@@ -823,7 +823,7 @@ namespace NessStudio.View.ExportScreen
             }
             catch (Exception ex)
             {
-                DebugLog.Write($"[ExportScreen] unable to load track icon {relativePath}: {ex.Message}");
+                DebugLog.Write($"[ExportScreen] unable to load track icon {relativePath}: {UserError.Message(ex)}");
                 return null;
             }
         }

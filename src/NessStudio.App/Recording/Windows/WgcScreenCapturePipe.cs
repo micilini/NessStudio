@@ -435,7 +435,7 @@ namespace NessStudio.Recording.Windows
         {
             if (region.Crop is { } crop) return new(crop.X, crop.Y, crop.Width, crop.Height);
             if (region.SelectedScreen is { } screen) return new(screen.Bounds.X, screen.Bounds.Y, screen.Bounds.Width, screen.Bounds.Height);
-            throw new InvalidOperationException("Nenhum alvo de captura selecionado.");
+                throw new InvalidOperationException("No capture target was selected.");
         }
 
         private static void TrySetIsBorderRequired(GraphicsCaptureSession session, bool value)
@@ -458,7 +458,7 @@ namespace NessStudio.Recording.Windows
 
             int ySize = width * height;
             if (destinationNv12.Length < ySize + (ySize / 2))
-                throw new ArgumentException("destinationNv12 menor que o esperado.", nameof(destinationNv12));
+                throw new ArgumentException("The destination NV12 buffer is smaller than expected.", nameof(destinationNv12));
 
             for (int row = 0; row < height; row++)
             {

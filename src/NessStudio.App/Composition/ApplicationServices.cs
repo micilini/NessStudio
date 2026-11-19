@@ -48,8 +48,8 @@ public sealed class ApplicationServices : IDisposable
         }
         catch (Exception error) when (error is FileNotFoundException or DllNotFoundException or BadImageFormatException or EntryPointNotFoundException or NativeEngineException)
         {
-            NativeEngineError = error.Message;
-            DebugLog.Write("[NativeBootstrap] " + error.Message);
+            NativeEngineError = UserError.Message(error);
+            DebugLog.Write("[NativeBootstrap] " + UserError.Message(error));
         }
     }
     /// <inheritdoc />

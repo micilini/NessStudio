@@ -77,7 +77,7 @@ namespace NessStudio.Recording.Windows
                 if (fps <= 0)
                     throw new ArgumentOutOfRangeException(nameof(fps));
                 if ((width & 1) != 0 || (height & 1) != 0)
-                    throw new ArgumentException("NV12 exige dimensões pares.");
+                    throw new ArgumentException("NV12 requires even dimensions.");
 
                 Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
 
@@ -133,7 +133,7 @@ namespace NessStudio.Recording.Windows
 
                 if (nv12Frame.Length < _frameSize)
                     throw new ArgumentException(
-                        $"Frame NV12 menor que o esperado. expected={_frameSize} actual={nv12Frame.Length}",
+                    $"NV12 frame is smaller than expected. expected={_frameSize} actual={nv12Frame.Length}",
                         nameof(nv12Frame));
 
                 int ret;
@@ -181,7 +181,7 @@ namespace NessStudio.Recording.Windows
 
                 if (nv12Frame.Length < _frameSize)
                     throw new ArgumentException(
-                        $"Frame NV12 menor que o esperado. expected={_frameSize} actual={nv12Frame.Length}",
+                    $"NV12 frame is smaller than expected. expected={_frameSize} actual={nv12Frame.Length}",
                         nameof(nv12Frame));
 
                 int ret;

@@ -71,6 +71,7 @@ namespace NessStudio.ViewModel
         private void RefreshRecordingCommands()
         {
             OnPropertyChanged(nameof(CanStartRecording)); OnPropertyChanged(nameof(CanPauseRecording)); OnPropertyChanged(nameof(CanStopRecording));
+            OnPropertyChanged(nameof(CanEditMicrophoneLevel)); OnPropertyChanged(nameof(CanEditSystemAudioLevel));
             CommandManager.InvalidateRequerySuggested();
         }
         private void RefreshEngineTime()
@@ -93,6 +94,19 @@ namespace NessStudio.ViewModel
         private bool _isScreenEnabled = false;
         private bool _isWebcamEnabled = false;
         private bool _isMicrophoneEnabled = false;
+        private double _microphoneLevel = 100, _systemAudioLevel = 100;
+        public double MicrophoneLevel
+        {
+            get => _microphoneLevel;
+            set { _microphoneLevel = RecordingPreferencesService.NormalizeLevel(value); OnPropertyChanged(nameof(MicrophoneLevel)); }
+        }
+        public double SystemAudioLevel
+        {
+            get => _systemAudioLevel;
+            set { _systemAudioLevel = RecordingPreferencesService.NormalizeLevel(value); OnPropertyChanged(nameof(SystemAudioLevel)); }
+        }
+        public bool CanEditMicrophoneLevel => CanStartRecording && IsEditEnabled && IsMicrophoneEnabled;
+        public bool CanEditSystemAudioLevel => CanStartRecording && IsEditEnabled && IsSystemAudioEnabled;
         public bool IsMicrophoneEnabled
         {
             get => _isMicrophoneEnabled;
@@ -102,6 +116,7 @@ namespace NessStudio.ViewModel
                 {
                     _isMicrophoneEnabled = value;
                     OnPropertyChanged(nameof(IsMicrophoneEnabled));
+                    OnPropertyChanged(nameof(CanEditMicrophoneLevel));
                     MicrophoneIcon = _isMicrophoneEnabled
                         ? "/Assets/Images/microfone-icon.png"
                         : "/Assets/Images/microfone-closed-icon.png";
@@ -118,6 +133,7 @@ namespace NessStudio.ViewModel
                 {
                     _isSystemAudioEnabled = value;
                     OnPropertyChanged(nameof(IsSystemAudioEnabled));
+                    OnPropertyChanged(nameof(CanEditSystemAudioLevel));
                     SystemAudioIcon = _isSystemAudioEnabled
                         ? "/Assets/Images/system-audio-icon.png"
                         : "/Assets/Images/system-audio-closed-icon.png";
@@ -152,6 +168,8 @@ namespace NessStudio.ViewModel
                 {
                     _isEditEnabled = value;
                     OnPropertyChanged(nameof(IsEditEnabled));
+                    OnPropertyChanged(nameof(CanEditMicrophoneLevel));
+                    OnPropertyChanged(nameof(CanEditSystemAudioLevel));
                 }
             }
         }
@@ -389,6 +407,14 @@ namespace NessStudio.ViewModel
         private bool _isRecording = false;
         private bool _isPaused = false;
         private DispatcherTimer _recTimer;
+        private DispatcherTimer? _storageTimer;
+        private readonly Func<string, ulong> _availableSpace;
+        private RecordingStorageStatus? _storageStatus;
+        private bool _storageQueryBusy, _storageQueryErrorLogged, _storageQueryUnavailable;
+        private string? _storageAutoStopMessage;
+        public string DiskSpaceMessage => _storageQueryUnavailable ? "Free disk space is currently unavailable."
+            : _storageStatus?.Message ?? "Checking free disk space...";
+        public bool IsDiskSpaceLow => !_storageQueryUnavailable && _storageStatus?.IsLow == true;
         private TimeSpan _elapsed;
         private bool _isClosing = false;
         private IRecordingService _rec;
@@ -407,12 +433,13 @@ namespace NessStudio.ViewModel
         public DelegateCommand SelectExecutionModeCommand { get; set; }
         private const string DrawAreaLabel = "Draw Area";
         public RecordingScreenWindowVM(RecordingScreenWindow recordingScreen, IRecorderEngineFactory recorderFactory,
-            RecordingPreferencesService preferences, NativeRecordingWorkspace previews)
+            RecordingPreferencesService preferences, NativeRecordingWorkspace previews, Func<string, ulong>? availableSpace = null)
         {
             RecordingScreenWindow = recordingScreen;
             _recorderFactory = recorderFactory ?? throw new ArgumentNullException(nameof(recorderFactory));
             _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
             _previews = previews ?? throw new ArgumentNullException(nameof(previews));
+            _availableSpace = availableSpace ?? RecordingStorageSpace.AvailableBytes;
             PlayRecodingCommand = new PlayRecodingCommand(this);
             PauseRecordingCommand = new PauseRecordingCommand(this);
             StopRecordingCommand = new StopRecordingCommand(this);
@@ -440,6 +467,13 @@ namespace NessStudio.ViewModel
             try
             {
                 RecordingPerfProbe.Mark("recording-window-loaded-begin");
+                if (_storageTimer is null)
+                {
+                    _storageTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(1) };
+                    _storageTimer.Tick += async (_, _) => await RefreshDiskSpaceAsync();
+                }
+                _storageTimer.Start();
+                _ = RefreshDiskSpaceAsync();
 
                 if (_recTimer == null)
                 {
@@ -515,11 +549,11 @@ namespace NessStudio.ViewModel
             }
             catch (Exception ex)
             {
-                DebugLog.Write("[VM] RecordingScreenWindow_Loaded ERROR:\n" + ex);
-                RecordingPerfProbe.Mark("recording-window-loaded-error", ex.Message);
+                DebugLog.Write("[VM] RecordingScreenWindow_Loaded ERROR:\n" + UserError.Details(ex));
+                RecordingPerfProbe.Mark("recording-window-loaded-error", UserError.Message(ex));
 
-                System.Windows.MessageBox.Show(
-                    $"Initialization error: {ex.Message}",
+                MessageBox.Show(
+                    $"Initialization error: {UserError.Message(ex)}",
                     "Error",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
@@ -556,6 +590,9 @@ namespace NessStudio.ViewModel
         private void LoadRecordingPreferencesFromApp()
         {
             var app = (App)System.Windows.Application.Current;
+            var levels = _preferences.Load();
+            MicrophoneLevel = levels.MicrophoneLevel;
+            SystemAudioLevel = levels.SystemAudioLevel;
             SelectedRecordingTimerSeconds = RecordingPreferencesService.NormalizeTimer(app.RecordingTimerSeconds);
             SelectedRecordingFps = RecordingPreferencesService.NormalizeFps(app.RecordingFps);
             SelectedExecutionMode = app.RecordingExecutionMode;
@@ -657,6 +694,8 @@ namespace NessStudio.ViewModel
             current.RecordingFps = SelectedRecordingFps;
             current.TimerSeconds = SelectedRecordingTimerSeconds;
             current.ExecutionMode = SelectedExecutionMode;
+            current.MicrophoneLevel = MicrophoneLevel;
+            current.SystemAudioLevel = SystemAudioLevel;
             service.Save(current);
         }
         private void SelectExecutionMode(object parameter)
@@ -698,7 +737,7 @@ namespace NessStudio.ViewModel
                 DebugLog.Write("[SAVEUI] close queued until finalization and project persistence complete");
                 return;
             }
-            if (_isRecording && System.Windows.MessageBox.Show(
+            if (_isRecording && MessageBox.Show(
                 "A recording is in progress.\nDo you want to stop, save and exit?", "Stop recording and exit?",
                 MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
             _isClosing = true;
@@ -728,8 +767,8 @@ namespace NessStudio.ViewModel
             }
             catch (Exception error)
             {
-                DebugLog.Write("[RecordingService] Close: " + error);
-                RecordingError = error.Message;
+                DebugLog.Write("[RecordingService] Close: " + UserError.Details(error));
+                RecordingError = UserError.Message(error);
                 OnPropertyChanged(nameof(RecordingError));
                 _isClosing = false;
                 IsEditEnabled = true;
@@ -738,6 +777,7 @@ namespace NessStudio.ViewModel
         private async Task CloseAfterCleanupAsync()
         {
             _isClosing = true;
+            _storageTimer?.Stop();
             ClearDrawAreaOverlay();
             _recTimer?.Stop();
             await _previews.DisposeAsync();
@@ -746,6 +786,47 @@ namespace NessStudio.ViewModel
             // Let that event unwind before submitting the final close to WPF.
             await System.Windows.Threading.Dispatcher.Yield(DispatcherPriority.Background);
             RecordingScreenWindow.Close();
+        }
+
+        private void ApplyDiskSpace(RecordingStorageStatus status)
+        {
+            _storageQueryUnavailable = false;
+            _storageStatus = status;
+            OnPropertyChanged(nameof(DiskSpaceMessage));
+            OnPropertyChanged(nameof(IsDiskSpaceLow));
+        }
+
+        private async Task RefreshDiskSpaceAsync()
+        {
+            if (_storageQueryBusy || _isClosing) return;
+            _storageQueryBusy = true;
+            try
+            {
+                string directory = OutDirFolder ?? ((App)System.Windows.Application.Current).Options.RecordingsDirectory;
+                var status = new RecordingStorageStatus(await Task.Run(() => _availableSpace(directory)));
+                if (_isClosing) return;
+                ApplyDiskSpace(status);
+                // Use the ordinary Stop/Save path once, including while paused.
+                // The space query never runs on the capture or presentation thread.
+                if (status.MustStop && _isRecording && !_startBusy && !_stopStarted && _rec is not null)
+                {
+                    _storageAutoStopMessage = $"Recording stopped automatically because only {status.FreeSpace} of free disk space remained (limit: 50 MiB).";
+                    DebugLog.WriteError("[RecordingStorage] " + _storageAutoStopMessage);
+                    BtnStop_Click();
+                }
+            }
+            catch (Exception error)
+            {
+                _storageQueryUnavailable = true;
+                if (!_isClosing) { OnPropertyChanged(nameof(DiskSpaceMessage)); OnPropertyChanged(nameof(IsDiskSpaceLow)); }
+                if (!_storageQueryErrorLogged)
+                {
+                    _storageQueryErrorLogged = true;
+                    DebugLog.WriteError("[RecordingStorage] Space query failed: " + UserError.Details(error));
+                }
+                // An unavailable query is not evidence that the disk is full.
+            }
+            finally { _storageQueryBusy = false; }
         }
 
         private void PopulateScreens()
@@ -824,9 +905,10 @@ namespace NessStudio.ViewModel
             try
             {
                 await _previews.UpdateIdleAsync(IsScreenEnabled ? LegacyGeometry.Describe(SelectedScreen) : null,
-                    IsWebcamEnabled ? SelectedCameraFormat : null, SelectedExecutionMode);
+                    IsWebcamEnabled ? SelectedCameraFormat : null, SelectedExecutionMode,
+                    IsDrawAreaInfoVisible ? LegacyGeometry.Describe(_lastDrawArea) : null);
             }
-            catch (Exception error) { DebugLog.Write("[NativePreview] " + error); }
+            catch (Exception error) { DebugLog.Write("[NativePreview] " + UserError.Details(error)); }
         }
         private void UpdateScreenPreviewRunning() => UpdateIdlePreview();
         private void StopScreenPreview() { }
@@ -851,7 +933,10 @@ namespace NessStudio.ViewModel
             RefreshEngineTime(); RefreshRecordingCommands();
             if (change.State == RecordingState.Failed)
             {
-                RecordingError = change.Error?.Message ?? "The recording engine failed.";
+                RecordingError = change.Error is null ? "The recording engine failed." : UserError.Message(change.Error);
+                if (_isRecording && !_startBusy && !_stopStarted)
+                    DebugLog.WriteError("[RecordingService] Recording failed: " +
+                        (change.Error is null ? RecordingError : UserError.Details(change.Error)));
                 OnPropertyChanged(nameof(RecordingError));
                 _recTimer?.Stop();
                 if (_isRecording && !_startBusy && !_stopStarted) BtnStop_Click();
@@ -908,7 +993,7 @@ namespace NessStudio.ViewModel
             }
             catch (Exception ex)
             {
-                DebugLog.Write("[VM] draw area overlay show ERROR:\n" + ex);
+                DebugLog.Write("[VM] draw area overlay show ERROR:\n" + UserError.Details(ex));
                 _captureOverlayWindow = null;
             }
         }
@@ -931,7 +1016,7 @@ namespace NessStudio.ViewModel
             }
             catch (Exception ex)
             {
-                DebugLog.Write("[VM] draw area overlay close ERROR:\n" + ex);
+                DebugLog.Write("[VM] draw area overlay close ERROR:\n" + UserError.Details(ex));
             }
             finally
             {
@@ -1034,7 +1119,7 @@ namespace NessStudio.ViewModel
 
             if (isDrawArea && !_lastDrawArea.HasValue)
             {
-                System.Windows.MessageBox.Show(
+                MessageBox.Show(
                     "Select a draw area before starting the recording.",
                     "Recording",
                     MessageBoxButton.OK,
@@ -1052,7 +1137,7 @@ namespace NessStudio.ViewModel
                 IsRecButtonVisible = true;
                 IsEditEnabled = true;
 
-                System.Windows.MessageBox.Show(
+                MessageBox.Show(
                     "The selected draw area spans multiple monitors or is outside the selected screen.\nPlease select an area inside a single monitor.",
                     "Recording",
                     MessageBoxButton.OK,
@@ -1068,7 +1153,7 @@ namespace NessStudio.ViewModel
                 IsRecButtonVisible = true;
                 IsEditEnabled = true;
 
-                System.Windows.MessageBox.Show(
+                MessageBox.Show(
                     "Could not resolve a valid screen target. Please select a screen or a draw area again.",
                     "Recording",
                     MessageBoxButton.OK,
@@ -1085,6 +1170,8 @@ namespace NessStudio.ViewModel
             try
             {
                 Directory.CreateDirectory(outDir);
+                _storageAutoStopMessage = null;
+                ApplyDiskSpace(await Task.Run(() => RecordingStorageSpace.EnsureCanStart(outDir, _availableSpace)));
                 // Verify storage before opening devices or starting the countdown.
                 using (var probe = new FileStream(Path.Combine(outDir, ".write-check"), FileMode.CreateNew,
                     FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose))
@@ -1115,7 +1202,7 @@ namespace NessStudio.ViewModel
                     IsRecButtonVisible = true;
                     IsEditEnabled = true;
 
-                    System.Windows.MessageBox.Show(
+                    MessageBox.Show(
                         "Select at least one video or audio source.",
                         "Recording",
                         MessageBoxButton.OK,
@@ -1127,9 +1214,12 @@ namespace NessStudio.ViewModel
                 var targets = selection.BuildTargets(LegacyGeometry.Describe(IsScreenEnabled || isDrawArea ? screen : null));
 
                 DebugLog.Write($"[VM] Creating recorder | outDir={outDir} | crop={(crop.HasValue ? crop.Value.ToString() : "null")}");
+                IsEditEnabled = false;
+                await Task.Run(SaveRecordingPreferencesToDisk);
                 await _previews.SuspendAsync();
                 _rec = _recorderFactory.Create(new RecordingRequest(outDir, targets, LegacyGeometry.Describe(crop), runtimeOptions,
-                    SelectedExecutionMode, Camera: IsWebcamEnabled ? SelectedCameraFormat : null));
+                    SelectedExecutionMode, Camera: IsWebcamEnabled ? SelectedCameraFormat : null)
+                    { MicrophoneGain = (float)(MicrophoneLevel / 100), SystemAudioGain = (float)(SystemAudioLevel / 100) });
                 _previews.Adopt(_rec);
                 _rec.StateChanged += RecordingService_StateChanged;
 
@@ -1200,10 +1290,10 @@ namespace NessStudio.ViewModel
             }
             catch (Exception ex)
             {
-                RecordingError = ex.Message;
+                RecordingError = UserError.Message(ex);
                 CurrentRecordingState = RecordingState.Failed;
                 OnPropertyChanged(nameof(RecordingError)); OnPropertyChanged(nameof(CurrentRecordingState));
-                DebugLog.WriteError("[VM] BtnRec_Click ERROR:\n" + ex);
+                DebugLog.WriteError("[VM] BtnRec_Click ERROR:\n" + UserError.Details(ex));
 
                 try { _recTimer.Stop(); } catch { }
                 try { if (_rec is not null) { _rec.StateChanged -= RecordingService_StateChanged; await _rec.DisposeAsync(); } } catch (Exception cleanupError) { DebugLog.Write("[RecordingService] cleanup: " + cleanupError); }
@@ -1234,8 +1324,8 @@ namespace NessStudio.ViewModel
                 {
                 }
 
-                if (!_isClosing) System.Windows.MessageBox.Show(
-                    $"Failed to start recording:\n{ex.Message}\n\n{ex.InnerException?.Message}\n\nLog file:\n{DebugLog.GetErrorPath()}",
+                if (!_isClosing) MessageBox.Show(
+                    $"Failed to start recording:\n{UserError.Message(ex)}\n\n{UserError.Message(ex.InnerException)}\n\nLog file:\n{DebugLog.GetErrorPath()}",
                     "Recording",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error
@@ -1274,8 +1364,8 @@ namespace NessStudio.ViewModel
             }
             catch (Exception error)
             {
-                RecordingError = error.Message; OnPropertyChanged(nameof(RecordingError));
-                DebugLog.Write("[VM] Pause/Resume: " + error);
+                RecordingError = UserError.Message(error); OnPropertyChanged(nameof(RecordingError));
+                DebugLog.Write("[VM] Pause/Resume: " + UserError.Details(error));
                 if (!_stopStarted) BtnStop_Click();
             }
             finally
@@ -1317,13 +1407,12 @@ namespace NessStudio.ViewModel
             bool saved = false;
             try
             {
-                savingVm.ApplyState(new RecordingSaveProgress { Title = "Saving Recording...", Message = "Draining recording...", IsIndeterminate = true });
+                savingVm.ApplyState(new RecordingSaveProgress { Title = "Saving Recording...", Message = "Finishing recording files...", IsIndeterminate = true });
                 savingWindow.Show();
                 RecordingScreenWindow.Hide();
                 await System.Windows.Threading.Dispatcher.Yield(DispatcherPriority.Render);
                 IProgress<RecordingSaveProgress> progress = new Progress<RecordingSaveProgress>(savingVm.ApplyState);
-                // The service completes only after native drain, export and manifest publication.
-                await rec.StopAsync();
+                // The service closes the captured tracks and publishes their metadata.
                 string deliver = await rec.StopAndFinalizeAsync(progress);
                 if (string.IsNullOrWhiteSpace(deliver) || !File.Exists(deliver)) throw new InvalidDataException("No finalized media asset was returned.");
                 await ProjectIngestService.ProcessAsync(OutDirFolder, progress);
@@ -1332,13 +1421,19 @@ namespace NessStudio.ViewModel
                 OnPropertyChanged(nameof(CurrentRecordingState));
                 RecordingPerfProbe.Mark("recording-save-pipeline-completed");
                 saved = true;
+                string? notice = rec.Result?.FinalizationNotice;
+                if (_storageAutoStopMessage is not null || notice is not null)
+                    MessageBox.Show(savingWindow,
+                        string.Join("\n\n", new[] { _storageAutoStopMessage, notice, "Saved recording:\n" + OutDirFolder }
+                            .Where(text => !string.IsNullOrWhiteSpace(text))),
+                        "Low disk space", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
             catch (Exception error)
             {
-                RecordingError = error.Message; CurrentRecordingState = RecordingState.Failed;
+                RecordingError = UserError.Message(error); CurrentRecordingState = RecordingState.Failed;
                 OnPropertyChanged(nameof(RecordingError)); OnPropertyChanged(nameof(CurrentRecordingState));
-                DebugLog.Write("[VM] Finalization/project persistence failed: " + error);
-                System.Windows.MessageBox.Show(savingWindow, $"Recording could not be completed:\n{error.Message}\n\nPartial files were preserved in:\n{OutDirFolder}",
+                DebugLog.WriteError("[VM] Finalization/project persistence failed: " + UserError.Details(error));
+                MessageBox.Show(savingWindow, $"Recording could not be completed:\n{UserError.Message(error)}\n\nPartial files were preserved in:\n{OutDirFolder}",
                     "Recording", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
@@ -1347,8 +1442,8 @@ namespace NessStudio.ViewModel
                 try { await rec.DisposeAsync(); }
                 catch (Exception error)
                 {
-                    saved = false; RecordingError = error.Message; CurrentRecordingState = RecordingState.Failed;
-                    DebugLog.Write("[VM] Awaited recording cleanup failed: " + error);
+                    saved = false; RecordingError = UserError.Message(error); CurrentRecordingState = RecordingState.Failed;
+                    DebugLog.WriteError("[VM] Awaited recording cleanup failed: " + UserError.Details(error));
                 }
                 _rec = null; _isRecording = false; _isPaused = false;
                 _isSavingRecording = false; _stopStarted = false; _pauseBusy = false;
@@ -1377,7 +1472,7 @@ namespace NessStudio.ViewModel
                     UpdateScreenPreviewRunning(); UpdateWebcamPreviewRunning();
                 }
             }
-            catch (Exception error) { DebugLog.Write("[VM] Post-finalization window cleanup: " + error); }
+            catch (Exception error) { DebugLog.Write("[VM] Post-finalization window cleanup: " + UserError.Details(error)); }
         }
 
         public void StartDrawAreaSelection()
@@ -1406,22 +1501,7 @@ namespace NessStudio.ViewModel
                 bool? ok = win.ShowDialog();
                 if (ok == true && win.Result.HasValue)
                 {
-                    _lastDrawArea = win.Result.Value;
-                    int w = ((int)Math.Round(_lastDrawArea.Value.Width)) & ~1;
-                    int h = ((int)Math.Round(_lastDrawArea.Value.Height)) & ~1;
-                    DrawAreaInfoText = $"Draw Area: {w} x {h}";
-                    IsDrawAreaInfoVisible = true;
-                    _lastDrawArea = new System.Windows.Rect(_lastDrawArea.Value.X, _lastDrawArea.Value.Y, w, h);
-                    var drawItem = ScreenOptions.FirstOrDefault(o => o.Value == null &&
-                                 string.Equals(o.Display, DrawAreaLabel, StringComparison.OrdinalIgnoreCase));
-                    if (drawItem != null)
-                    {
-                        _suppressSelectionHandler = true;
-                        SelectedScreenOption = drawItem;
-                        _suppressSelectionHandler = false;
-                    }
-                    SelectedScreen = null;
-                    StopScreenPreview();
+                    ApplyDrawArea(win.Result.Value);
                 }
                 else
                 {
@@ -1436,6 +1516,32 @@ namespace NessStudio.ViewModel
             {
                 ghostOwner.Close();
             }
+        }
+        private void ApplyDrawArea(System.Windows.Rect region)
+        {
+            int w = ((int)Math.Round(region.Width)) & ~1;
+            int h = ((int)Math.Round(region.Height)) & ~1;
+            region = new System.Windows.Rect(region.X, region.Y, w, h);
+            var monitor = FindSingleScreenContainingCrop(region);
+            if (monitor is null || w < 2 || h < 2)
+            {
+                MessageBox.Show("Select a region entirely within one physical monitor.",
+                    "Draw Area", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                return;
+            }
+            _lastDrawArea = region;
+            DrawAreaInfoText = $"Draw Area: {w} x {h}";
+            IsDrawAreaInfoVisible = true;
+            var drawItem = ScreenOptions.FirstOrDefault(o => o.Value == null &&
+                         string.Equals(o.Display, DrawAreaLabel, StringComparison.OrdinalIgnoreCase));
+            if (drawItem != null)
+            {
+                _suppressSelectionHandler = true;
+                SelectedScreenOption = drawItem;
+                _suppressSelectionHandler = false;
+            }
+            SelectedScreen = monitor;
+            UpdateScreenPreviewRunning();
         }
         private void SelectPrimaryScreen()
         {

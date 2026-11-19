@@ -14,6 +14,9 @@ namespace nss::audio {
 // push(), and overload never evicts a packet or invents replacement samples.
 class PacketQueue final {
 public:
+  // File writes can pause longer than the real-time endpoint buffer without
+  // losing source data. Reserve a bounded five-second recording burst buffer.
+  static constexpr uint32_t recording_pending_ms = 5000;
   struct Packet {
     uint32_t frames{}, flags{};
     uint64_t position{}, qpc{}, keepalive_frames{};
@@ -28,23 +31,27 @@ private:
   mutable std::mutex mutex_;
   std::condition_variable changed_;
   std::vector<uint8_t> bytes_;
-  std::array<Packet, 512> packets_{};
+  std::vector<Packet> packets_;
   size_t packet_head_{}, packet_count_{}, read_{}, write_{};
-  uint32_t align_, max_frames_, max_packet_frames_;
+  uint32_t align_, max_frames_, max_packet_frames_, pending_ms_;
   Stats stats_;
   bool closed_{};
   std::exception_ptr failure_;
-  static size_t checked_bytes(uint32_t rate, uint32_t align) {
-    if (rate < 8000 || rate > 192000 || !align || align > 8)
+  static size_t checked_bytes(uint32_t rate, uint32_t align, uint32_t pending_ms) {
+    if (rate < 8000 || rate > 192000 || !align || align > 8 ||
+        !pending_ms || pending_ms > recording_pending_ms)
       throw std::invalid_argument("Invalid bounded audio queue format");
-    return size_t(rate / 2) * align;
+    return size_t(uint64_t(rate) * pending_ms / 1000) * align;
   }
 public:
-  PacketQueue(uint32_t rate, uint32_t align)
-      : bytes_(checked_bytes(rate, align)), align_(align),
-        max_frames_(rate / 2), max_packet_frames_(rate / 5) {
-    stats_.bytes = bytes_.size() + sizeof(packets_);
+  PacketQueue(uint32_t rate, uint32_t align, uint32_t pending_ms = 500)
+      : bytes_(checked_bytes(rate, align, pending_ms)),
+        packets_(512 * ((pending_ms + 499) / 500)), align_(align),
+        max_frames_(static_cast<uint32_t>(uint64_t(rate) * pending_ms / 1000)),
+        max_packet_frames_(rate / 5), pending_ms_(pending_ms) {
+    stats_.bytes = bytes_.size() + packets_.size() * sizeof(Packet);
   }
+  uint32_t pending_duration_limit_ms() const { return pending_ms_; }
   PacketQueue(const PacketQueue &) = delete;
   PacketQueue &operator=(const PacketQueue &) = delete;
   void push(const uint8_t *source, Packet packet) {
@@ -55,9 +62,12 @@ public:
     if (failure_) std::rethrow_exception(failure_);
     if (closed_)
       throw capture::Error(NSS_E_STATE, NSS_STAGE_AUDIO, 0, "Audio packet queue is closed");
-    if (packet_count_ == packets_.size() || packet.frames > max_frames_ - stats_.queued_frames)
+    if (packet_count_ == packets_.size() || packet.frames > max_frames_ - stats_.queued_frames) {
+      const auto message = "Audio processing queue exceeded its " + std::to_string(pending_ms_) +
+          "ms buffer; recording stopped";
       throw capture::Error(NSS_E_BACKPRESSURE, NSS_STAGE_AUDIO, 0,
-                           "Audio processing queue exceeded its 500ms budget; no packet discarded");
+                           message.c_str());
+    }
     const size_t count = size_t(packet.frames) * align_;
     const auto first = (std::min)(count, bytes_.size() - write_);
     if (!packet.silent) {

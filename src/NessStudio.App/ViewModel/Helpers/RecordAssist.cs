@@ -1,4 +1,4 @@
-﻿// Historical capture adapter, compiled only by the isolated baseline host.
+// Historical capture adapter, compiled only by the isolated baseline host.
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using NessStudio.Models;
@@ -194,7 +194,7 @@ namespace NessStudio.ViewModel.Helpers
                 }
                 catch (Exception ex)
                 {
-                    DebugLog.Write("[RecordAssist] StopActiveTracksForFinalizationAsync -> screen ERROR:\n" + ex);
+                    DebugLog.Write("[RecordAssist] StopActiveTracksForFinalizationAsync -> screen ERROR:\n" + UserError.Details(ex));
                     errors.Add(ex);
                 }
             }
@@ -206,7 +206,7 @@ namespace NessStudio.ViewModel.Helpers
             }
             catch (Exception ex)
             {
-                DebugLog.Write("[RecordAssist] StopActiveTracksForFinalizationAsync -> webcam ERROR:\n" + ex);
+                DebugLog.Write("[RecordAssist] StopActiveTracksForFinalizationAsync -> webcam ERROR:\n" + UserError.Details(ex));
                 errors.Add(ex);
             }
 
@@ -217,7 +217,7 @@ namespace NessStudio.ViewModel.Helpers
             }
             catch (Exception ex)
             {
-                DebugLog.Write("[RecordAssist] StopActiveTracksForFinalizationAsync -> mic ERROR:\n" + ex);
+                DebugLog.Write("[RecordAssist] StopActiveTracksForFinalizationAsync -> mic ERROR:\n" + UserError.Details(ex));
                 errors.Add(ex);
             }
 
@@ -228,7 +228,7 @@ namespace NessStudio.ViewModel.Helpers
             }
             catch (Exception ex)
             {
-                DebugLog.Write("[RecordAssist] StopActiveTracksForFinalizationAsync -> system audio ERROR:\n" + ex);
+                DebugLog.Write("[RecordAssist] StopActiveTracksForFinalizationAsync -> system audio ERROR:\n" + UserError.Details(ex));
                 errors.Add(ex);
             }
 
@@ -596,7 +596,7 @@ namespace NessStudio.ViewModel.Helpers
             }
             catch (Exception ex)
             {
-                DebugLog.Write("[RecordAssist] CleanupLegacyJoinArtifacts warning:\n" + ex);
+                DebugLog.Write("[RecordAssist] CleanupLegacyJoinArtifacts warning:\n" + UserError.Details(ex));
             }
         }
 
@@ -688,7 +688,7 @@ namespace NessStudio.ViewModel.Helpers
             }
             catch (Exception ex)
             {
-                DebugLog.Write("[RecordAssist] WriteManifestNow ERROR:\n" + ex);
+                DebugLog.Write("[RecordAssist] WriteManifestNow ERROR:\n" + UserError.Details(ex));
             }
 
             DebugLog.Write("[RecordAssist] WriteManifestNow end");

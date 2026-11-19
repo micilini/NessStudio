@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading;
 using NAudio.CoreAudioApi;
@@ -67,7 +67,7 @@ namespace NessStudio.ViewModel.Helpers
                 }
                 catch (Exception ex)
                 {
-                    DebugLog.Write("[SystemLoopback] DataAvailable ERROR:\n" + ex);
+                    DebugLog.Write("[SystemLoopback] DataAvailable ERROR:\n" + UserError.Details(ex));
                 }
             };
 
@@ -90,7 +90,7 @@ namespace NessStudio.ViewModel.Helpers
                 }
                 catch (Exception ex)
                 {
-                    DebugLog.Write("[SystemLoopback] Tick ERROR:\n" + ex);
+                    DebugLog.Write("[SystemLoopback] Tick ERROR:\n" + UserError.Details(ex));
                 }
             };
 
@@ -122,7 +122,7 @@ namespace NessStudio.ViewModel.Helpers
         public static void Resume(WasapiLoopbackCapture cap)
         {
             DebugLog.Write("[SystemLoopback] Resume begin");
-            try { cap?.StartRecording(); } catch (Exception ex) { DebugLog.Write("[SystemLoopback] Resume ERROR:\n" + ex); }
+            try { cap?.StartRecording(); } catch (Exception ex) { DebugLog.Write("[SystemLoopback] Resume ERROR:\n" + UserError.Details(ex)); }
             DebugLog.Write("[SystemLoopback] Resume end");
         }
 
@@ -136,7 +136,7 @@ namespace NessStudio.ViewModel.Helpers
             try { writer?.Flush(); } catch { }
             try { writer?.Dispose(); } catch { }
 
-            try { cap?.StopRecording(); } catch (Exception ex) { DebugLog.Write("[SystemLoopback] StopRecording warning:\n" + ex); }
+            try { cap?.StopRecording(); } catch (Exception ex) { DebugLog.Write("[SystemLoopback] StopRecording warning:\n" + UserError.Details(ex)); }
 
             try { System.Threading.Thread.Sleep(80); } catch { }
 

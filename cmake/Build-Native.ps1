@@ -98,12 +98,18 @@ try {
         @('native/deps/x264-abi164/licenses/AUTHORS','x264.AUTHORS.txt'),
         @('native/deps/x264-abi164/x264-eaa68fa.source.tar.gz','x264.source.tar.gz'),
         @('native/deps/NessMuxer/native-backends.lock.json','encoder-dependencies.json'),
-        @('native/deps/NessMuxer/third_party/nv-codec-headers/LICENSE.txt','NVENC-headers.LICENSE.txt'),
+        @('native/deps/nv-codec-headers/LICENSE.txt','NVENC-headers.LICENSE.txt'),
         @('native/deps/NessMuxer/third_party/amf/LICENSE.txt','AMF-headers.LICENSE.txt')
     )
     foreach($encoderFile in $encoderFiles) {
         Copy-Item -LiteralPath (Join-Path $repository $encoderFile[0]) -Destination (Join-Path $binaryDirectory $encoderFile[1])
     }
+    # Report the API headers actually used by this engine, independently of the
+    # older pinned NessMuxer source bundle's original dependency manifest.
+    $encoderLock=Get-Content -LiteralPath (Join-Path $binaryDirectory 'encoder-dependencies.json') -Raw | ConvertFrom-Json
+    $engineLock=Get-Content -LiteralPath (Join-Path $repository 'native/deps/dependencies.lock.json') -Raw | ConvertFrom-Json
+    $encoderLock.nvenc=$engineLock.nvenc
+    [IO.File]::WriteAllText((Join-Path $binaryDirectory 'encoder-dependencies.json'),($encoderLock|ConvertTo-Json -Depth 12),[Text.UTF8Encoding]::new($false))
     $vplLicense=Join-Path $NativeBuildDirectory 'native/vendor/libvpl-2.17.0/LICENSE'
     Copy-Item -LiteralPath $vplLicense -Destination (Join-Path $binaryDirectory 'libvpl.LICENSE.txt')
     $inputs=@(Get-Item -LiteralPath (Join-Path $binaryDirectory 'libnessstudio.dll'),(Join-Path $binaryDirectory 'nessstudio-cli.exe'),(Join-Path $binaryDirectory 'native-build.json'),(Join-Path $binaryDirectory 'NessMuxer.LICENSE.txt'),(Join-Path $binaryDirectory 'json.LICENSE.txt'),(Join-Path $binaryDirectory 'native-dependencies.json'))

@@ -11,9 +11,8 @@ internal static class NativeSessionManifestReader
 
     internal static SessionManifest Read(string path, string directory, RecordingTargets targets, bool camera = false, bool program = false)
     {
-        using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        if (input.Length is <= 0 or > 1048576) throw new InvalidDataException("Native manifest exceeds its control budget.");
-        using var document = JsonDocument.Parse(input, new() { MaxDepth = 64 });
+        using var document = ProjectMetadataStore.ReadDocument(directory, Path.GetFileName(path))
+            ?? throw new FileNotFoundException("Native recording metadata was not found.", path);
         var root = document.RootElement;
         bool audioOnly = !targets.AnyVideo;
         if (root.GetProperty("version").GetInt32() != 1 || !root.GetProperty("mediaComplete").GetBoolean() ||

@@ -77,6 +77,7 @@ class Session final {
     size_t secondary_count_{}; uint64_t secondary_suppressed_{};
     bool stop_requested_{}, started_{}, closing_{}, cleanup_pending_{}, poll_busy_{}, poll_interrupted_{}, stop_result_emitted_{}, fault_emitted_{};
     int64_t stop_started_{};
+    int64_t stop_timeout_hns_{};
     std::atomic<bool> budget_released_{};
     std::filesystem::path journal_path_;
     std::unique_ptr<Journal> journal_;

@@ -84,15 +84,15 @@ public static class RecoveryCatalog
                         var project = ProjectManifestStore.Read(directory).Manifest;
                         CheckAssets(directory, project);
                         string registration = Path.Combine(directory, "project-registration.json");
-                        if (project.Version == 3 && File.Exists(registration))
+                        if (project.Version == 3)
                         {
-                            using var receipt = Read(registration);
-                            if (receipt.RootElement.GetProperty("version").GetInt32() == 1 && !receipt.RootElement.GetProperty("registered").GetBoolean())
-                                result.Add(new(directory, registration, "RegistrationPending", "Finalized project files are available, but library registration did not finish. Registering again preserves its identity and avoids duplicates.", false));
+                            using var receipt = ProjectMetadataStore.ReadDocument(directory, "project-registration.json", project);
+                            if (receipt is not null && receipt.RootElement.GetProperty("version").GetInt32() == 1 && !receipt.RootElement.GetProperty("registered").GetBoolean())
+                                result.Add(new(directory, project.Metadata is null ? registration : Path.Combine(directory,"manifest.json"), "RegistrationPending", "Finalized project files are available, but library registration did not finish. Registering again preserves its identity and avoids duplicates.", false));
                         }
                     }
                     catch (Exception error) when (Controlled(error))
-                    { result.Add(new(directory, Path.Combine(directory, "manifest.json"), "ProjectNeedsAttention", error.Message, false)); }
+                    { result.Add(new(directory, Path.Combine(directory, "manifest.json"), "ProjectNeedsAttention", UserError.Message(error), false)); }
                 }
                 var journals = Directory.EnumerateFiles(directory, "*.json", SearchOption.TopDirectoryOnly).Take(MaximumFilesPerDirectory * 2)
                     .Where(path => Path.GetFileName(path).Contains(".session-", StringComparison.Ordinal) || Path.GetFileName(path).Contains(".job-", StringComparison.Ordinal))
@@ -110,7 +110,7 @@ public static class RecoveryCatalog
                         if (!Reparse(child)) queue.Enqueue((child, depth + 1));
             }
             catch (Exception error) when (Controlled(error))
-            { result.Add(new(directory, directory, "ScanDiagnostic", error.Message, false)); }
+            { result.Add(new(directory, directory, "ScanDiagnostic", UserError.Message(error), false)); }
         }
         if (queue.Count != 0) result.Add(new(root, root, "ScanLimit", "Recovery scan reached its 512-directory limit. Open the affected recording folder directly.", false));
         return result;
@@ -126,9 +126,9 @@ public static class RecoveryCatalog
             if(Path.GetExtension(path).ToLowerInvariant() is not (".mkv" or ".mp4" or ".wav")||Reparse(path))continue;
             long bytes=new FileInfo(path).Length;bool finalized=false;
             string sidecar=path+".manifest.json";
-            if(File.Exists(sidecar))
+            if(File.Exists(sidecar)||File.Exists(Path.Combine(directory,"manifest.json")))
             {
-                try{using var document=Read(sidecar);var root=document.RootElement;finalized=root.GetProperty("finalized").GetBoolean()&&root.GetProperty("mediaComplete").GetBoolean()&&root.GetProperty("bytes").GetInt64()==bytes;}
+                try{using var document=ProjectMetadataStore.ReadDocument(directory,Path.GetFileName(sidecar));if(document is not null){var root=document.RootElement;finalized=root.GetProperty("finalized").GetBoolean()&&root.GetProperty("mediaComplete").GetBoolean()&&root.GetProperty("bytes").GetInt64()==bytes;}}
                 catch(Exception error)when(Controlled(error)){ }
             }
             result.Add(new(Path.GetFileName(path),bytes,finalized));
@@ -170,7 +170,7 @@ public static class RecoveryCatalog
             return Candidate("FinalizedMediaPending", "Native media finalized before the project was saved. Recovery copies and fully decodes the available finalized tracks into a new project.", true);
         }
         catch (Exception error) when (Controlled(error))
-        { return new(directory, path, "InvalidJournal", error.Message, false); }
+        { return new(directory, path, "InvalidJournal", UserError.Message(error), false); }
     }
 
     private static bool Resolved(string directory, string journal)

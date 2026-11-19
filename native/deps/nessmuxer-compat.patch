@@ -1,0 +1,311 @@
+diff --git a/include/ness_buffered_io.hpp b/include/ness_buffered_io.hpp
+new file mode 100644
+index 0000000000000000000000000000000000000000..e0c3ca7679fa9bca75c134f8e0c9ee63a7ea62b5
+--- /dev/null
++++ b/include/ness_buffered_io.hpp
+@@ -0,0 +1,134 @@
++#pragma once
++// Bounded, owned write handoff. Disk operations run outside the producer lock.
++// Offsets and FIFO order are preserved, including container header patches.
++#include <algorithm>
++#include <array>
++#include <chrono>
++#include <condition_variable>
++#include <cstdint>
++#include <cstring>
++#include <exception>
++#include <functional>
++#include <mutex>
++#include <span>
++#include <stdexcept>
++#include <thread>
++#include <utility>
++#include <vector>
++
++namespace nessmuxer::io {
++class BufferFull final : public std::runtime_error {
++public:
++  BufferFull() : std::runtime_error("Recording storage backlog exceeded its bounded write buffer") {}
++};
++class BufferedWrites final {
++public:
++  struct Stats {
++    uint64_t capacity_bytes{}, pending_bytes{}, peak_pending_bytes{}, submitted_bytes{}, completed_bytes{},
++        submitted_operations{}, completed_operations{};
++    double maximum_write_ms{};
++  };
++private:
++  struct Operation { uint64_t offset{}; uint32_t bytes{}; };
++  static constexpr size_t chunk_bytes = 65536, operation_limit = 8192;
++  mutable std::mutex mutex_;
++  std::condition_variable available_, completed_;
++  std::vector<uint8_t> buffer_;
++  std::array<Operation, operation_limit> operations_{};
++  size_t head_{}, count_{}, read_{}, write_{}, queued_bytes_{};
++  bool closing_{};
++  std::exception_ptr failure_;
++  Stats stats_;
++  std::function<void(uint64_t, std::span<const uint8_t>)> write_file_;
++  std::thread worker_;
++  static size_t checked_capacity(size_t capacity) {
++    if (capacity < chunk_bytes || capacity > 256 * 1024 * 1024)
++      throw std::invalid_argument("Invalid recording storage buffer");
++    return capacity;
++  }
++  void run() noexcept {
++    try {
++      std::array<uint8_t, chunk_bytes> copy;
++      for (;;) {
++        Operation operation;
++        {
++          std::unique_lock lock(mutex_);
++          available_.wait(lock, [&] { return count_ || closing_; });
++          if (!count_) return;
++          operation = operations_[head_];
++          const auto first = (std::min)(size_t(operation.bytes), buffer_.size() - read_);
++          std::memcpy(copy.data(), buffer_.data() + read_, first);
++          if (first < operation.bytes) std::memcpy(copy.data() + first, buffer_.data(), operation.bytes - first);
++          read_ = (read_ + operation.bytes) % buffer_.size();
++          queued_bytes_ -= operation.bytes;
++          head_ = (head_ + 1) % operations_.size(); --count_;
++        }
++        const auto begin = std::chrono::steady_clock::now();
++        write_file_(operation.offset, {copy.data(), operation.bytes});
++        const auto elapsed = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - begin).count();
++        {
++          std::lock_guard lock(mutex_);
++          stats_.maximum_write_ms = (std::max)(stats_.maximum_write_ms, elapsed);
++          stats_.pending_bytes -= operation.bytes;
++          stats_.completed_bytes += operation.bytes;
++          ++stats_.completed_operations;
++        }
++        completed_.notify_all();
++      }
++    } catch (...) {
++      { std::lock_guard lock(mutex_); failure_ = std::current_exception(); closing_ = true; }
++      completed_.notify_all(); available_.notify_all();
++    }
++  }
++public:
++  BufferedWrites(size_t capacity, std::function<void(uint64_t, std::span<const uint8_t>)> writer)
++      : buffer_(checked_capacity(capacity)), write_file_(std::move(writer)) {
++    if (!write_file_)
++      throw std::invalid_argument("Invalid recording storage buffer");
++    stats_.capacity_bytes = capacity;
++    worker_ = std::thread([this] { run(); });
++  }
++  BufferedWrites(const BufferedWrites &) = delete;
++  BufferedWrites &operator=(const BufferedWrites &) = delete;
++  ~BufferedWrites() { try { finish(); } catch (...) {} }
++  void check() const {
++    std::lock_guard lock(mutex_);
++    if (failure_) std::rethrow_exception(failure_);
++  }
++  void write(uint64_t offset, std::span<const uint8_t> bytes) {
++    std::unique_lock lock(mutex_);
++    if (failure_) std::rethrow_exception(failure_);
++    if (closing_) throw std::logic_error("Recording storage writer is closed");
++    if (bytes.size() > UINT64_MAX - offset) throw std::invalid_argument("Recording storage offset overflow");
++    const auto needed = bytes.size() / chunk_bytes + (bytes.size() % chunk_bytes != 0);
++    if (bytes.size() > buffer_.size() - queued_bytes_ || needed > operations_.size() - count_) throw BufferFull();
++    stats_.submitted_bytes += bytes.size();
++    stats_.pending_bytes += bytes.size();
++    stats_.peak_pending_bytes = (std::max)(stats_.peak_pending_bytes, stats_.pending_bytes);
++    while (!bytes.empty()) {
++      const auto count = (std::min)(chunk_bytes, bytes.size());
++      const auto first = (std::min)(count, buffer_.size() - write_);
++      std::memcpy(buffer_.data() + write_, bytes.data(), first);
++      if (first < count) std::memcpy(buffer_.data(), bytes.data() + first, count - first);
++      write_ = (write_ + count) % buffer_.size();
++      queued_bytes_ += count;
++      operations_[(head_ + count_) % operations_.size()] = {offset, static_cast<uint32_t>(count)};
++      ++count_; ++stats_.submitted_operations;
++      offset += count; bytes = bytes.subspan(count);
++    }
++    lock.unlock(); available_.notify_one();
++  }
++  void drain() {
++    std::unique_lock lock(mutex_);
++    completed_.wait(lock, [&] { return failure_ || stats_.submitted_operations == stats_.completed_operations; });
++    if (failure_) std::rethrow_exception(failure_);
++  }
++  void finish() {
++    { std::lock_guard lock(mutex_); closing_ = true; }
++    available_.notify_all();
++    if (worker_.joinable()) worker_.join();
++    check();
++  }
++  Stats stats() const { std::lock_guard lock(mutex_); return stats_; }
++};
++} // namespace nessmuxer::io
+diff --git a/src/v2/core.cpp b/src/v2/core.cpp
+index b2935f66ba96ffbd819d3373e9344a1b996bc6d0..71b3dc6d867ead358a1f3b7d5f9bca5be5087734 100644
+--- a/src/v2/core.cpp
++++ b/src/v2/core.cpp
+@@ -1,4 +1,5 @@
+ #include "core.hpp"
++#include "ness_buffered_io.hpp"
+ #include <algorithm>
+ #include <bit>
+ #include <filesystem>
+@@ -225,6 +226,8 @@ void PacketCollector::discard() noexcept {
+ class FileSink final : public Sink {
+ #ifdef _WIN32
+     HANDLE handle_{INVALID_HANDLE_VALUE};
++    std::unique_ptr<nessmuxer::io::BufferedWrites> writes_;
++    uint64_t position_{};
+     static void checked(bool ok, const char *operation) {
+         if (!ok)
+             fail(-2, 4, operation, static_cast<int32_t>(HRESULT_FROM_WIN32(GetLastError())));
+@@ -248,39 +251,49 @@ class FileSink final : public Sink {
+         handle_ = CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, nullptr,
+                               CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+         checked(handle_ != INVALID_HANDLE_VALUE, "Cannot create new output file");
++        try {
++            writes_ = std::make_unique<nessmuxer::io::BufferedWrites>(64 * 1024 * 1024,
++                [this](uint64_t offset, std::span<const uint8_t> bytes) {
++                    LARGE_INTEGER at{}; at.QuadPart = static_cast<LONGLONG>(offset);
++                    checked(SetFilePointerEx(handle_, at, nullptr, FILE_BEGIN) != 0, "Output seek failed");
++                    DWORD done{};
++                    checked(WriteFile(handle_, bytes.data(), static_cast<DWORD>(bytes.size()), &done, nullptr) != 0,
++                        "Output write failed");
++                    if (done != bytes.size()) fail(NESS_V2_E_IO, NESS_V2_STAGE_OUTPUT, "Short output write");
++                });
++        } catch (...) { CloseHandle(handle_); handle_ = INVALID_HANDLE_VALUE; throw; }
+     }
+     ~FileSink() {
++        if (writes_) { try { writes_->finish(); } catch (...) {} }
+         if (handle_ != INVALID_HANDLE_VALUE)
+             CloseHandle(handle_);
+     }
+     void write(std::span<const uint8_t> bytes) override {
+-        while (!bytes.empty()) {
+-            DWORD done{};
+-            const auto count = static_cast<DWORD>((std::min)(bytes.size(), size_t{1024 * 1024}));
+-            checked(WriteFile(handle_, bytes.data(), count, &done, nullptr) != 0, "Output write failed");
+-            if (done != count)
+-                fail(-2, 4, "Short output write");
+-            bytes = bytes.subspan(done);
++        if (bytes.size() > INT64_MAX - position_) fail(NESS_V2_E_ARGUMENT, NESS_V2_STAGE_OUTPUT, "Output size overflow");
++        try { writes_->write(position_, bytes); }
++        catch (const nessmuxer::io::BufferFull &) {
++            fail(NESS_V2_E_BACKPRESSURE, NESS_V2_STAGE_OUTPUT, "Recording storage backlog exceeded its 64 MiB output buffer");
+         }
++        position_ += bytes.size();
+     }
+     uint64_t tell() override {
+-        LARGE_INTEGER zero{}, position{};
+-        checked(SetFilePointerEx(handle_, zero, &position, FILE_CURRENT) != 0, "Output tell failed");
+-        return static_cast<uint64_t>(position.QuadPart);
++        writes_->check();
++        return position_;
+     }
+     void seek(uint64_t offset) override {
+         if (offset > INT64_MAX)
+             fail(-3, 4, "Output seek overflow");
+-        LARGE_INTEGER position{};
+-        position.QuadPart = static_cast<LONGLONG>(offset);
+-        checked(SetFilePointerEx(handle_, position, nullptr, FILE_BEGIN) != 0, "Output seek failed");
++        writes_->check(); position_ = offset;
+     }
+-    void flush() override { checked(FlushFileBuffers(handle_) != 0, "Output flush failed"); }
++    void flush() override { writes_->drain(); checked(FlushFileBuffers(handle_) != 0, "Output flush failed"); }
+     void close() override {
+         if (handle_ == INVALID_HANDLE_VALUE)
+             return;
+-        checked(CloseHandle(handle_) != 0, "Output close failed");
+-        handle_ = INVALID_HANDLE_VALUE;
++        std::exception_ptr failure;
++        try { writes_->finish(); } catch (...) { failure = std::current_exception(); }
++        const auto file = std::exchange(handle_, INVALID_HANDLE_VALUE);
++        if (!CloseHandle(file) && !failure) checked(false, "Output close failed");
++        if (failure) std::rethrow_exception(failure);
+     }
+ #else
+     FILE *file_{};
+diff --git a/src/v2/nvenc.cpp b/src/v2/nvenc.cpp
+index b95594ba0b998e997738921b36c36b7d22909520..5af22f3de0a2acdf7a06de2a89f3f131957adc59 100644
+--- a/src/v2/nvenc.cpp
++++ b/src/v2/nvenc.cpp
+@@ -43,7 +43,12 @@ struct Runtime {
+     uint32_t version{};
+     nv_checked(maximum(&version),"NVENC driver version query failed",1);
+     constexpr uint32_t required=(NVENCAPI_MAJOR_VERSION<<4)|NVENCAPI_MINOR_VERSION;
+-    if(version<required) fail(NESS_V2_E_UNAVAILABLE,1,"NVENC driver API is older than the compiled SDK",static_cast<int32_t>(version));
++    if(version<required) {
++      const auto message=std::string("NVIDIA driver supports NVENC API ")+std::to_string(version>>4)+"."+
++        std::to_string(version&15)+"; this encoder requires API "+std::to_string(NVENCAPI_MAJOR_VERSION)+"."+
++        std::to_string(NVENCAPI_MINOR_VERSION)+" or later. Update the NVIDIA graphics driver or select Automatic/CPU mode.";
++      fail(NESS_V2_E_UNAVAILABLE,1,message.c_str(),static_cast<int32_t>(version));
++    }
+     api.version=NV_ENCODE_API_FUNCTION_LIST_VER;
+     nv_checked(create(&api),"NVENC function table creation failed",1);
+     if(!api.nvEncOpenEncodeSessionEx || !api.nvEncGetEncodeGUIDCount || !api.nvEncGetEncodeGUIDs ||
+diff --git a/src/v2/qsv.cpp b/src/v2/qsv.cpp
+index 8256e4e463952f9879d8bb0520b91589a0ba2b0d..9e5ffd33940d80e251d9514b063edfb8e29f59af 100644
+--- a/src/v2/qsv.cpp
++++ b/src/v2/qsv.cpp
+@@ -20,8 +20,14 @@ using Microsoft::WRL::ComPtr;
+ void checked_hr(HRESULT result,const char *message) {
+   if (FAILED(result)) fail(NESS_V2_E_ENCODER,2,message,result);
+ }
+-void checked_mfx(mfxStatus result,const char *message) {
+-  if (result<0) fail(NESS_V2_E_ENCODER,2,message,result);
++void checked_mfx(mfxStatus result,const char *message,uint32_t stage=NESS_V2_STAGE_ENCODER) {
++  if(result>=0) return;
++  // Unsupported capabilities discovered before Start may select another route.
++  // A device failure or an unsupported operation after Start must remain fatal.
++  const bool unavailable=stage==NESS_V2_STAGE_CONFIG &&
++    (result==MFX_ERR_UNSUPPORTED || result==MFX_ERR_NOT_FOUND || result==MFX_ERR_NOT_IMPLEMENTED);
++  fail(unavailable?NESS_V2_E_UNAVAILABLE:result==MFX_ERR_MEMORY_ALLOC?NESS_V2_E_ALLOC:NESS_V2_E_ENCODER,
++    stage,message,result);
+ }
+ struct Loader {
+   mfxLoader value=MFXLoad();
+@@ -29,11 +35,11 @@ struct Loader {
+   void filter(const char *name,mfxU32 data) {
+     if(!value) fail(NESS_V2_E_UNAVAILABLE,1,"oneVPL dispatcher unavailable");
+     const auto config=MFXCreateConfig(value);
+-    if(!config) fail(NESS_V2_E_UNAVAILABLE,1,"oneVPL filter allocation failed");
++    if(!config) fail(NESS_V2_E_ALLOC,1,"oneVPL filter allocation failed");
+     mfxVariant variant{}; variant.Version.Version=MFX_VARIANT_VERSION;
+     variant.Type=MFX_VARIANT_TYPE_U32; variant.Data.U32=data;
+     checked_mfx(MFXSetConfigFilterProperty(config,reinterpret_cast<const mfxU8 *>(name),variant),
+-      "oneVPL hardware filter rejected");
++      "oneVPL hardware filter rejected",NESS_V2_STAGE_CONFIG);
+   }
+ };
+ struct Driver {
+@@ -152,6 +158,9 @@ class Qsv final : public Encoder {
+     loader_.filter("mfxImplDescription.Impl",MFX_IMPL_TYPE_HARDWARE);
+     loader_.filter("mfxImplDescription.AccelerationMode",MFX_ACCEL_MODE_VIA_D3D11);
+     loader_.filter("mfxImplDescription.VendorID",0x8086);
++    // Internal, reference-counted encode surfaces are a 2.0 API. The dispatcher
++    // header release (2.17) is deliberately not a minimum driver requirement.
++    loader_.filter("mfxImplDescription.ApiVersion.Version",2u<<16);
+     loader_.filter("mfxImplDescription.mfxEncoderDescription.encoder.CodecID",MFX_CODEC_AVC);
+     for(mfxU32 index=0;index<64;++index) {
+       mfxHDL handle{};
+@@ -165,7 +174,7 @@ class Qsv final : public Encoder {
+         description_ext->VendorID==0x8086;
+       MFXDispReleaseImplDescription(loader_.value,handle);
+       if(!matches) continue;
+-      checked_mfx(MFXCreateSession(loader_.value,index,&driver_.value),"Direct QSV session creation failed");
++      checked_mfx(MFXCreateSession(loader_.value,index,&driver_.value),"Direct QSV session creation failed",NESS_V2_STAGE_CONFIG);
+       if(driver_.value) break;
+     }
+     if(!driver_.value) fail(NESS_V2_E_UNAVAILABLE,1,"No direct QSV runtime matches the selected adapter LUID");
+@@ -222,11 +231,11 @@ class Qsv final : public Encoder {
+     const auto query=MFXVideoENCODE_Query(driver_.value,&parameters,&queried);
+     if(query==MFX_WRN_PARTIAL_ACCELERATION)
+       fail(NESS_V2_E_UNAVAILABLE,1,"Direct QSV configuration requires partial software acceleration");
+-    checked_mfx(query,"Direct QSV configuration unsupported");
++    checked_mfx(query,"Direct QSV configuration unsupported",NESS_V2_STAGE_CONFIG);
+     const auto initialized=MFXVideoENCODE_Init(driver_.value,&parameters);
+     if(initialized==MFX_WRN_PARTIAL_ACCELERATION)
+       fail(NESS_V2_E_UNAVAILABLE,1,"Direct QSV initialization requires partial software acceleration");
+-    checked_mfx(initialized,"Direct QSV encoder initialization failed");
++    checked_mfx(initialized,"Direct QSV encoder initialization failed",NESS_V2_STAGE_CONFIG);
+     driver_.encoder_open=true;
+     auto effective=parameters;
+     checked_mfx(MFXVideoENCODE_GetVideoParam(driver_.value,&effective),"Direct QSV effective parameters unavailable");

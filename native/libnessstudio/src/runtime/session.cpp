@@ -17,6 +17,12 @@ Session::Session(std::shared_ptr<EngineBudget> budget, std::unique_ptr<Backend> 
     : budget_(std::move(budget)), backend_(std::move(backend)), requested_(std::move(request)), id_(session_id()) {
     if (live_sessions.fetch_add(1) >= 64) { --live_sessions; throw SessionBudgetExceeded{}; }
     backend_->bind_session(id_);
+    // Interactive Stop includes durable journal/media flushes on the user's
+    // storage volume. A transient disk stall must not cancel otherwise valid
+    // media merely because Windows has not finished an accepted write. For
+    // interactive sessions elapsed time is diagnostic, not proof of failure.
+    // Keep the finite control/probe deadline for noninteractive sessions.
+    stop_timeout_hns_ = requested_.value("interactive", false) ? 0 : 5 * hns_per_second;
     journal_path_ = Journal::recording_path(requested_, id_);
     worker_heartbeat_ = qpc_hns();
 }
@@ -112,12 +118,12 @@ void Session::execute(Operation op) {
     operation_.reset();
 }
 void Session::observe_stop_deadline() {
-    if (!stop_requested_ || stop_result_emitted_ || qpc_hns() - stop_started_ < 5 * hns_per_second) return;
+    if (!stop_timeout_hns_ || !stop_requested_ || stop_result_emitted_ || qpc_hns() - stop_started_ < stop_timeout_hns_) return;
     if (operation_ && !operation_->result_emitted) {
         emit(operation_->id, NSS_E_CANCELLED, NSS_EVENT_RESULT, fault(NSS_E_CANCELLED, NSS_STAGE_CONTROL, "Operation interrupted; native cleanup is still pending"), true);
         operation_->result_emitted = true;
     }
-    latch(fault(NSS_E_TIMEOUT, NSS_STAGE_CONTROL, "Stop exceeded its 5 second deadline; cleanup remains pending"));
+    latch(fault(NSS_E_TIMEOUT, NSS_STAGE_CONTROL, "Recording shutdown exceeded its deadline; cleanup remains pending and partial files were preserved"));
     emit(stop_id_, first_error_->code, NSS_EVENT_RESULT, *first_error_); stop_result_emitted_ = true;
 }
 void Session::stop_pipeline() {
@@ -132,8 +138,8 @@ void Session::stop_pipeline() {
             {
                 std::lock_guard lock(mutex_);
                 if (progress.error) latch(progress.error);
-                if (qpc_hns() - stop_started_ >= 5 * hns_per_second && !stop_result_emitted_) {
-                    latch(fault(NSS_E_TIMEOUT, NSS_STAGE_CONTROL, "Stop exceeded its 5 second deadline; cleanup remains pending"));
+                if (stop_timeout_hns_ && qpc_hns() - stop_started_ >= stop_timeout_hns_ && !stop_result_emitted_) {
+                    latch(fault(NSS_E_TIMEOUT, NSS_STAGE_CONTROL, "Recording shutdown exceeded its deadline; cleanup remains pending and partial files were preserved"));
                     if (stop_id_) { emit(stop_id_, first_error_->code, NSS_EVENT_RESULT, *first_error_); stop_result_emitted_ = true; }
                 }
             }
@@ -224,8 +230,8 @@ nss_result Session::poll(uint32_t timeout, nss_event_v1& output, Fault& error) {
     struct reset { bool& value; ~reset() { value = false; } } done{poll_busy_};
     observe_stop_deadline();
     uint32_t wait_ms = timeout;
-    if (stop_requested_ && !stop_result_emitted_) {
-        const auto remaining = 5 * hns_per_second - (qpc_hns() - stop_started_);
+    if (stop_timeout_hns_ && stop_requested_ && !stop_result_emitted_) {
+        const auto remaining = stop_timeout_hns_ - (qpc_hns() - stop_started_);
         wait_ms = (std::min)(wait_ms, static_cast<uint32_t>((std::max)(int64_t{0}, (remaining + 9999) / 10000)));
     }
     changed_.wait_for(lock, std::chrono::milliseconds(wait_ms), [&] { return count_ || poll_interrupted_ || closing_; });
@@ -265,7 +271,14 @@ Json Session::snapshot(bool include_metrics) const {
         {"firstError", first_error_ ? diagnostic(*first_error_) : Json(nullptr)}, {"secondaryErrors", secondary}, {"secondaryErrorsSuppressed", secondary_suppressed_},
         {"requested", requested_},
         {"journalPath", std::string(reinterpret_cast<const char*>(journal_text.data()), journal_text.size())},
-        {"watchdog", {{"diagnosticOnly", true}, {"workerHeartbeatAgeHns", (std::max)(int64_t{}, now - worker_heartbeat_.load())}, {"stopDeadlineMs", 5000}, {"timeoutPolicy", "Report failure and retain resources until native cleanup actually completes"}}},
+        {"watchdog", {{"diagnosticOnly", stop_timeout_hns_ == 0},
+            {"workerHeartbeatAgeHns", (std::max)(int64_t{}, now - worker_heartbeat_.load())},
+            {"stopElapsedMs", stop_started_ ? (std::max)(int64_t{}, now - stop_started_) / 10000 : 0},
+            {"slowStop", stop_started_ && !stop_result_emitted_ && now - stop_started_ >= 60 * hns_per_second},
+            {"slowStopThresholdMs", 60000}, {"stopDeadlineMs", stop_timeout_hns_ / 10000},
+            {"timeoutPolicy", stop_timeout_hns_ == 0
+                ? "Interactive shutdown waits for accepted writes and native cleanup; elapsed time alone does not invalidate media"
+                : "Noninteractive shutdown has a finite control deadline; retain resources until native cleanup actually completes"}}},
         {"activeTimeHns", clock_.active_time(now)}, {"wallTimeHns", clock_.wall_time(now)},
         {"acceptedCommands", command_count_}, {"eventsQueued", count_}, {"ordinaryResultReservations", ordinary_reservations_}};
     if (include_metrics) {

@@ -11,6 +11,10 @@ namespace NessStudio
 {
     public partial class App : Application
     {
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool SetProcessPreferredUILanguages(uint flags, string languages, out uint count);
+
         private static Mutex _appMutex;
         public string DatabaseFileName = "nesstudio.dll";
         /// <summary>Gets the product version embedded in the application assembly.</summary>
@@ -42,6 +46,16 @@ namespace NessStudio
         public App() : this(ApplicationOptions.ForCurrentUser()) { }
         public App(ApplicationOptions options)
         {
+            // Keep application resources and framework-generated errors in English,
+            // including work performed by background capture/export tasks.
+            var english = System.Globalization.CultureInfo.GetCultureInfo("en-US");
+            System.Globalization.CultureInfo.DefaultThreadCurrentCulture = english;
+            System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = english;
+            System.Globalization.CultureInfo.CurrentCulture = english;
+            System.Globalization.CultureInfo.CurrentUICulture = english;
+            // Native Windows dialogs and OS-generated messages use the process
+            // MUI preference. This changes only NessStudio, not Windows settings.
+            SetProcessPreferredUILanguages(0x8, "en-US\0\0", out _);
             Options = options ?? throw new ArgumentNullException(nameof(options));
             RenderOptions.ProcessRenderMode = options.PresentationMode;
             // Apply a persisted software presentation policy before constructing
@@ -61,13 +75,13 @@ namespace NessStudio
             Services = new ApplicationServices(this);
             this.DispatcherUnhandledException += (s, e) =>
             {
-                MessageBox.Show("Global Error:\n\n" + e.Exception, "Fatal",
+                MessageBox.Show("Global Error:\n\n" + UserError.Details(e.Exception), "Fatal",
                     MessageBoxButton.OK, MessageBoxImage.Error);
                 Shutdown(-1);
             };
             AppDomain.CurrentDomain.UnhandledException += (s, e) =>
             {
-                MessageBox.Show("Global Error:\n\n" + e.ExceptionObject, "Fatal",
+                MessageBox.Show("Global Error:\n\n" + UserError.Details(e.ExceptionObject as Exception), "Fatal",
                     MessageBoxButton.OK, MessageBoxImage.Error);
                 Shutdown(-1);
             };

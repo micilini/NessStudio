@@ -12,10 +12,10 @@
         WindowStartupLocation="CenterScreen"
         Background="#171A1D"
         Title="Ness Studio Recorder"
-        Height="270"
+        Height="300"
         Width="740"
-        MinHeight="270"
-        MaxHeight="270"
+        MinHeight="300"
+        MaxHeight="300"
         MinWidth="740"
         MaxWidth="740">
 
@@ -361,6 +361,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <Border Grid.Row="0"
@@ -447,7 +448,7 @@
                             IsHitTestVisible="{Binding IsEditEnabled}"
                             Style="{StaticResource RecorderPreviewBoxStyle}">
                         <Grid>
-                            <TextBlock Text="Screen Monitor">
+                            <TextBlock Text="Screen">
                                 <TextBlock.Style>
                                     <Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource RecorderSectionTitleStyle}">
                                         <Setter Property="Visibility" Value="Visible" />
@@ -463,11 +464,14 @@
                             <TextBlock Text="{Binding DrawAreaInfoText}"
                                        FontSize="12"
                                        Foreground="#CCD5D7"
+                                       Background="#C0171A1D"
+                                       Panel.ZIndex="1"
+                                       Padding="3,1"
                                        HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"
+                                       VerticalAlignment="Bottom"
                                        TextWrapping="Wrap"
                                        TextAlignment="Center"
-                                       Margin="10"
+                                       Margin="4"
                                        Visibility="{Binding IsDrawAreaInfoVisible, Converter={StaticResource BoolToVis}, Mode=OneWay}" />
 
                             <presentation:NativePreviewControl x:Name="ScreenNativePreview" SourceId="1" Workspace="{Binding PreviewWorkspace, ElementName=RootWindow}"
@@ -540,7 +544,7 @@
                     <Border Grid.Row="0"
                             Style="{StaticResource RecorderPreviewBoxStyle}">
                         <Grid>
-                            <TextBlock Text="Screen Webcam">
+                            <TextBlock Text="Webcam">
                                 <TextBlock.Style>
                                     <Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource RecorderSectionTitleStyle}">
                                         <Setter Property="Visibility" Value="Visible" />
@@ -628,8 +632,9 @@
                             <Slider Minimum="0"
                                     Maximum="100"
                                     x:Name="sldMicVolume"
-                                    Value="80"
-                                    IsEnabled="{Binding IsMicrophoneEnabled}"
+                                    Value="{Binding MicrophoneLevel, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                    ToolTip="{Binding MicrophoneLevel, StringFormat='Recording level: {0:0}%'}"
+                                    IsEnabled="{Binding CanEditMicrophoneLevel}"
                                     Height="22" />
                         </DockPanel>
 
@@ -680,8 +685,9 @@
                             <Slider Minimum="0"
                                     Maximum="100"
                                     x:Name="sldSystemVolume"
-                                    Value="80"
-                                    IsEnabled="{Binding IsSystemAudioEnabled}"
+                                    Value="{Binding SystemAudioLevel, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                    ToolTip="{Binding SystemAudioLevel, StringFormat='Recording level: {0:0}%'}"
+                                    IsEnabled="{Binding CanEditSystemAudioLevel}"
                                     Height="22" />
                         </DockPanel>
 
@@ -834,5 +840,19 @@
                 </Button>
             </StackPanel>
         </Grid>
+        <Border Grid.Row="2" Padding="14,4,14,7" Background="#202427">
+            <TextBlock x:Name="DiskSpaceStatusText" Text="{Binding DiskSpaceMessage}" FontSize="11" TextWrapping="Wrap">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Foreground" Value="#AAB4B8" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsDiskSpaceLow}" Value="True">
+                                <Setter Property="Foreground" Value="#F4BD66" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </Border>
     </Grid>
 </Window>

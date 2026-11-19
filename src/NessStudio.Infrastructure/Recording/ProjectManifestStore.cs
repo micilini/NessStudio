@@ -8,7 +8,9 @@ public static class ProjectManifestStore
 {
     public const string Schema = "nessstudio.project";
     public const int CurrentVersion = 3;
-    private const int MaximumBytes = 1048576;
+    // A completed project embeds several individually bounded native control
+    // documents. Its aggregate budget must exceed a single sidecar's budget.
+    private const int MaximumBytes = 8 * 1024 * 1024;
     private static readonly JsonSerializerOptions Options = new() { PropertyNameCaseInsensitive = true, AllowTrailingCommas = true, WriteIndented = true, MaxDepth = 64 };
 
     public static ProjectManifestDocument Read(string directory)
@@ -31,7 +33,7 @@ public static class ProjectManifestStore
             { diagnostics.Add($"Alias {name} has an unsupported version; the supported authority remains {Path.GetFileName(authority)}."); }
             catch (UnsupportedProjectSchemaException) { throw; }
             catch (Exception error) when (error is IOException or InvalidDataException or JsonException or InvalidOperationException or ArgumentException)
-            { diagnostics.Add($"{name}: {error.Message}"); }
+            { diagnostics.Add($"{name}: {UserError.Message(error)}"); }
         }
         if (selected is null) throw new InvalidDataException("No supported project manifest is readable. " + string.Join(" ", diagnostics));
         if (Path.GetFileName(authority) != "manifest.json") diagnostics.Add("Using session.manifest.json because the authority is absent or invalid; no file was changed.");
@@ -54,6 +56,9 @@ public static class ProjectManifestStore
         var manifest = JsonSerializer.Deserialize<SessionManifest>(bytes, Options) ?? throw new InvalidDataException("Empty project manifest.");
         if (version == 3)
         {
+            if (manifest.Metadata is { } metadata && (metadata.Version != 1 || metadata.Documents is null || metadata.Documents.Count > 128 ||
+                metadata.Documents.Any(item => Path.GetFileName(item.Key) != item.Key || item.Value.ValueKind != JsonValueKind.Object)))
+                throw new InvalidDataException("Invalid consolidated recording metadata.");
             if (manifest.Schema != Schema || string.IsNullOrWhiteSpace(manifest.ProjectId) || string.IsNullOrWhiteSpace(manifest.SessionId) ||
                 string.IsNullOrWhiteSpace(manifest.EngineVersion) || manifest.State is not ("Completed" or "Recovered" or "Interrupted" or "Failed") || manifest.Assets is null || manifest.Assets.Count is < 1 or > 16)
                 throw new InvalidDataException("Invalid v3 project identity, state or assets.");
@@ -116,7 +121,9 @@ public static class ProjectManifestStore
         Directory.CreateDirectory(directory);
         byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(manifest, Options); _ = Parse(bytes);
         string primary = Path.Combine(directory, "manifest.json"), alias = Path.Combine(directory, "session.manifest.json");
-        WriteAtomic(primary, bytes, overwrite); WriteAtomic(alias, bytes, overwrite); return primary;
+        WriteAtomic(primary, bytes, overwrite);
+        if (manifest.Metadata is null) WriteAtomic(alias, bytes, overwrite);
+        return primary;
     }
     public static void WriteAtomic(string path, ReadOnlySpan<byte> bytes, bool overwrite = false)
     {
@@ -149,5 +156,14 @@ public static class ProjectManifestStore
         BackupAuthority(directory); WriteAliases(directory, document.Manifest, overwrite: true);
     }
     public static void RecordRegistration(string directory, string projectId, bool registered, string? error = null)
-    { WriteAtomic(Path.Combine(directory, "project-registration.json"), JsonSerializer.SerializeToUtf8Bytes(new { version = 1, projectId, registered, recoverable = !registered, sourceAssetsPreserved = true, error }, Options), overwrite: true); }
+    {
+        var value = JsonSerializer.SerializeToElement(new { version = 1, projectId, registered, recoverable = !registered, sourceAssetsPreserved = true, error }, Options);
+        if (File.Exists(Path.Combine(directory, "manifest.json")))
+        {
+            var manifest = Read(directory).Manifest;
+            if (manifest.Metadata is { } metadata)
+            { metadata.Registration = value; WriteAliases(directory, manifest, overwrite: true); return; }
+        }
+        WriteAtomic(Path.Combine(directory, "project-registration.json"), JsonSerializer.SerializeToUtf8Bytes(value, Options), overwrite: true);
+    }
 }

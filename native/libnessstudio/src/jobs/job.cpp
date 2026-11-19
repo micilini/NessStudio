@@ -354,15 +354,18 @@ struct Job::Impl {
       throw Error(NSS_E_IO, NSS_STAGE_STORAGE, error.native, error.what());
     }
   }
-  void preserve_terminal_checkpoint() noexcept {
+  void preserve_terminal_checkpoint(uint32_t state_override = 0) noexcept {
     try {
-      checkpoint();
+      checkpoint(state_override);
     } catch (const std::exception &error) {
       try {
         std::lock_guard lock(mutex);
         if (secondary.size() < 8)
           secondary.push_back({{"code", NSS_E_IO},
                                {"stage", NSS_STAGE_STORAGE},
+                               {"hresult", dynamic_cast<const Error *>(&error)
+                                               ? dynamic_cast<const Error *>(&error)->native
+                                               : 0},
                                {"message", error.what()}});
       } catch (...) {
       }
@@ -812,25 +815,37 @@ struct Job::Impl {
         release_budget();
       }
     } catch (const Error &e) {
+      const auto terminal = e.code == NSS_E_CANCELLED ? NSS_JOB_CANCELLED : NSS_JOB_FAILED;
       {
         std::lock_guard lock(mutex);
         fault = {e.code, e.stage, e.native, e.what()};
-        state = e.code == NSS_E_CANCELLED ? NSS_JOB_CANCELLED : NSS_JOB_FAILED;
+        completion_claimed = true;
+      }
+      // A terminal event permits managed consumers to read/consolidate these
+      // documents and release the job. Publish it only after the final durable
+      // checkpoint, just as the successful completion path already does.
+      preserve_terminal_checkpoint(terminal);
+      {
+        std::lock_guard lock(mutex);
+        state = terminal;
         emit(start_id, e.code);
         if (cancel_id)
           emit(cancel_id, state == NSS_JOB_CANCELLED ? NSS_OK : e.code);
         release_budget();
       }
-      preserve_terminal_checkpoint();
     } catch (const std::exception &e) {
       {
         std::lock_guard lock(mutex);
         fault = {NSS_E_INTERNAL, NSS_STAGE_JOB, 0, e.what()};
+        completion_claimed = true;
+      }
+      preserve_terminal_checkpoint(NSS_JOB_FAILED);
+      {
+        std::lock_guard lock(mutex);
         state = NSS_JOB_FAILED;
         emit(start_id, fault.code);
         release_budget();
       }
-      preserve_terminal_checkpoint();
     }
     --workers;
   }

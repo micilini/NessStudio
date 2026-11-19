@@ -19,6 +19,9 @@ public sealed class LegacyRecorderEngineFactory : IRecorderEngineFactory
         if (request.ExecutionMode != RecordingExecutionMode.Automatic)
             throw new NotSupportedException("A strict native execution mode cannot select the legacy engine.");
         ArgumentNullException.ThrowIfNull(request.Targets);
+        if ((request.Targets.MicDeviceId is not null && request.MicrophoneGain != 1) ||
+            (request.Targets.LoopbackDeviceId is not null && request.SystemAudioGain != 1))
+            throw new NotSupportedException("Recording audio levels require the native recording engine.");
         ArgumentNullException.ThrowIfNull(request.RuntimeOptions);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.OutputDirectory);
         if (request.Targets.Screen is { } monitor &&

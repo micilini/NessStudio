@@ -11,13 +11,14 @@ namespace NessStudio.View.RecordingScreen
         public RecordingScreenWindow() : this(null) { }
         /// <summary>Composes a recorder explicitly while preserving the application services for presentation and storage.</summary>
         /// <param name="recorderFactory">The recorder composition, or null to use the application policy.</param>
-        public RecordingScreenWindow(NessStudio.Recording.Engines.IRecorderEngineFactory? recorderFactory)
+        public RecordingScreenWindow(NessStudio.Recording.Engines.IRecorderEngineFactory? recorderFactory,
+            Func<string, ulong>? availableSpace = null)
         {
             PreviewWorkspace = new NessStudio.Recording.NativeRecordingWorkspace(AppContext.BaseDirectory,DebugLog.Logger);
             InitializeComponent();
             var services = ((App)System.Windows.Application.Current).Services;
             this.DataContext = new RecordingScreenWindowVM(this, recorderFactory ?? services.RecorderFactory, services.RecordingPreferences,
-                PreviewWorkspace);
+                PreviewWorkspace, availableSpace);
         }
     }
 }

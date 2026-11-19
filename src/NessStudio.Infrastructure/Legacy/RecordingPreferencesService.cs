@@ -1,4 +1,4 @@
-﻿using NessStudio.Models;
+using NessStudio.Models;
 using System;
 using System.IO;
 using System.Text.Json;
@@ -44,6 +44,8 @@ namespace NessStudio.ViewModel.Helpers
                     throw new InvalidOperationException("Preferences JSON returned null model.");
                 model.TimerSeconds = NormalizeTimer(model.TimerSeconds);
                 model.RecordingFps = NormalizeFps(model.RecordingFps);
+                model.MicrophoneLevel = NormalizeLevel(model.MicrophoneLevel);
+                model.SystemAudioLevel = NormalizeLevel(model.SystemAudioLevel);
                 if (!Enum.IsDefined(model.ExecutionMode)) model.ExecutionMode = NessStudio.Recording.Engines.RecordingExecutionMode.Automatic;
                 if (model.CreatedAtUtc == default)
                     model.CreatedAtUtc = DateTime.UtcNow;
@@ -56,7 +58,7 @@ namespace NessStudio.ViewModel.Helpers
             {
                 var fallback = CreateDefaultModel();
                 Save(fallback);
-                _log.Write("[REC-PREFS] file corrupted, recreated with defaults:\n" + ex);
+                _log.Write("[REC-PREFS] file corrupted, recreated with defaults:\n" + UserError.Details(ex));
                 return fallback;
             }
         }
@@ -70,6 +72,8 @@ namespace NessStudio.ViewModel.Helpers
                 Directory.CreateDirectory(directory);
             model.TimerSeconds = NormalizeTimer(model.TimerSeconds);
             model.RecordingFps = NormalizeFps(model.RecordingFps);
+            model.MicrophoneLevel = NormalizeLevel(model.MicrophoneLevel);
+            model.SystemAudioLevel = NormalizeLevel(model.SystemAudioLevel);
             if (!Enum.IsDefined(model.ExecutionMode)) model.ExecutionMode = NessStudio.Recording.Engines.RecordingExecutionMode.Automatic;
             var now = DateTime.UtcNow;
             if (model.CreatedAtUtc == default)
@@ -89,6 +93,7 @@ namespace NessStudio.ViewModel.Helpers
             _log.Write("[REC-PREFS] file reset to defaults");
             return model;
         }
+        public static double NormalizeLevel(double value) => double.IsFinite(value) ? Math.Clamp(value, 0, 100) : 100;
         public static int NormalizeTimer(int value)
         {
             return value switch

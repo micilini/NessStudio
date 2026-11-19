@@ -16,7 +16,13 @@ public sealed record RecordingRequest(string OutputDirectory, RecordingTargets T
     PhysicalRectangle? Crop, RecordingRuntimeOptions RuntimeOptions,
     RecordingExecutionMode ExecutionMode = RecordingExecutionMode.Automatic, RecordingVideoOptions? Video = null,
     RecordingCameraOptions? Camera = null, RecordingOutputMode OutputMode = RecordingOutputMode.SeparateSources,
-    RecordingScene? Scene = null);
+    RecordingScene? Scene = null)
+{
+    /// <summary>Gets the microphone's recording gain, from silence (0) to unchanged device samples (1).</summary>
+    public float MicrophoneGain { get; init; } = 1;
+    /// <summary>Gets the loopback recording gain without changing Windows playback volume.</summary>
+    public float SystemAudioGain { get; init; } = 1;
+}
 
 /// <summary>Identifies the exact advertised input format independently of the encoded output.</summary>
 /// <param name="DeviceId">The stable native camera symbolic link.</param><param name="Width">The input width.</param>
@@ -113,7 +119,11 @@ public sealed record RecordingStatistics(TimeSpan? ActiveDuration, long? Submitt
 /// <param name="Selection">The approved native route and actual stage selections, when reported.</param>
 /// <param name="CameraAssetPath">The effective independently finalized camera path, when selected.</param>
 public sealed record RecordingResult(string OutputDirectory, string PrimaryAssetPath, string ManifestPath, string Backend,
-    RecordingStatistics Statistics, RecordingSelection? Selection = null, string? CameraAssetPath = null);
+    RecordingStatistics Statistics, RecordingSelection? Selection = null, string? CameraAssetPath = null)
+{
+    /// <summary>Gets an actionable notice when source files were saved but optional combined media was deferred.</summary>
+    public string? FinalizationNotice { get; init; }
+}
 
 /// <summary>Describes a state notification produced on the operation thread.</summary>
 /// <param name="State">The resulting state.</param>

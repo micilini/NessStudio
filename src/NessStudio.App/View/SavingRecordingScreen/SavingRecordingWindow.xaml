@@ -47,7 +47,7 @@
                 </Grid.OpacityMask>
 
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="76" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
@@ -56,15 +56,18 @@
                         BorderBrush="#343B40"
                         BorderThickness="0,0,0,1"
                         Padding="22,16">
-                    <StackPanel Orientation="Horizontal"
-                                VerticalAlignment="Center">
-                        <Border Width="42"
+                    <Grid VerticalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="42" />
+                            <ColumnDefinition Width="13" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="42"
                                 Height="42"
                                 CornerRadius="14"
                                 Background="#2A2022"
                                 BorderBrush="#663131"
-                                BorderThickness="1"
-                                Margin="0,0,13,0">
+                                BorderThickness="1">
                             <Image Source="/Assets/Images/logo-nessstudio.png"
                                    RenderOptions.BitmapScalingMode="HighQuality"
                                    Width="28"
@@ -73,7 +76,7 @@
                                    VerticalAlignment="Center" />
                         </Border>
 
-                        <StackPanel VerticalAlignment="Center">
+                        <StackPanel Grid.Column="2" VerticalAlignment="Center">
                             <TextBlock Text="{Binding Title}"
                                        VerticalAlignment="Center"
                                        FontFamily="Arial"
@@ -82,23 +85,24 @@
                                        Foreground="#CCD5D7" />
 
                             <TextBlock Text="Please keep this window open while NessStudio finishes the recording."
+                                       TextWrapping="Wrap"
                                        FontFamily="Arial"
                                        FontSize="12"
                                        Foreground="#708089"
                                        Margin="0,4,0,0" />
                         </StackPanel>
-                    </StackPanel>
+                    </Grid>
                 </Border>
 
                 <Border Grid.Row="1"
                         Background="#202427"
-                        Padding="22,18">
+                        Padding="22,12">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
-                            <RowDefinition Height="16" />
+                            <RowDefinition Height="10" />
                             <RowDefinition Height="Auto" />
-                            <RowDefinition Height="12" />
+                            <RowDefinition Height="8" />
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 

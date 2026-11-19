@@ -8,8 +8,11 @@ namespace NessStudio.Recording
     public sealed class SessionManifest
     {
         public int Version { get; set; } = 2;
-        /// <summary>Identifies the v3 project schema; session.manifest.json remains an equivalent alias.</summary>
+        /// <summary>Identifies the v3 project schema; older projects can also have a session.manifest.json alias.</summary>
         public string? Schema { get; set; }
+        /// <summary>Stores native diagnostics and project bookkeeping in the sole metadata file of new recordings.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public RecordingMetadata? Metadata { get; set; }
         public string? ProjectId { get; set; }
         public string? EngineVersion { get; set; }
         public string State { get; set; } = "Completed";
@@ -111,5 +114,13 @@ namespace NessStudio.Recording
             public int W { get; set; }
             public int H { get; set; }
         }
+    }
+
+    public sealed class RecordingMetadata
+    {
+        public int Version { get; set; } = 1;
+        public Dictionary<string, JsonElement> Documents { get; set; } = new(StringComparer.Ordinal);
+        public JsonElement? Registration { get; set; }
+        public JsonElement? Recovery { get; set; }
     }
 }

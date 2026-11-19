@@ -93,7 +93,7 @@ public sealed class NativePreviewControl : Image
             else { Unsubscribe(); Detach(); PresentationError = null; }
         }
         catch (Exception error)
-        { PresentationError = error.Message; DebugLog.Write("[NativePreview] " + error); Detach(); }
+        { PresentationError = UserError.Message(error); DebugLog.Write("[NativePreview] " + UserError.Details(error)); Detach(); }
     }
     private void Unsubscribe() { if (_subscribed) { CompositionTarget.Rendering -= RenderFrame; _subscribed = false; } }
     /// <inheritdoc />
@@ -132,9 +132,9 @@ public sealed class NativePreviewControl : Image
             finally { if (!ReferenceEquals(next,_pendingGpuFrame)) next.Dispose(); }
         }
         catch (NativeEngineException error) when (error.ResultCode == -5)
-        { PresentationError = error.Message; Detach(); _rebind = true; _lastRender = now + Stopwatch.Frequency / 4; }
+        { PresentationError = UserError.Message(error); Detach(); _rebind = true; _lastRender = now + Stopwatch.Frequency / 4; }
         catch (Exception error)
-        { PresentationError = error.Message; DebugLog.Write("[NativePreview] " + error); Detach(); _rebind = false; }
+        { PresentationError = UserError.Message(error); DebugLog.Write("[NativePreview] " + UserError.Details(error)); Detach(); _rebind = false; }
     }
     private void MarkPresented(NativePreviewFrame frame)
     {
@@ -176,7 +176,7 @@ public sealed class NativePreviewControl : Image
     {
         try { if (_pendingGpuFrame is not null) CompleteGpuCopy(); else _copyPoll.Stop(); }
         catch (Exception error)
-        { PresentationError = error.Message; DebugLog.Write("[NativePreview] " + error); Detach(); _rebind = false; }
+        { PresentationError = UserError.Message(error); DebugLog.Write("[NativePreview] " + UserError.Details(error)); Detach(); _rebind = false; }
     }
     private bool CompleteGpuCopy()
     {
@@ -211,7 +211,7 @@ public sealed class NativePreviewControl : Image
     private static async Task RetireGpuCopyAsync(D3DPreviewSurface surface, NativePreviewFrame frame)
     {
         try { while (!surface.IsCopyComplete()) await Task.Delay(1).ConfigureAwait(false); }
-        catch (Exception error) { DebugLog.Write("[NativePreview] Retiring GPU copy: " + error); }
+        catch (Exception error) { DebugLog.Write("[NativePreview] Retiring GPU copy: " + UserError.Details(error)); }
         finally { surface.Dispose(); frame.Dispose(); }
     }
     private void Detach()

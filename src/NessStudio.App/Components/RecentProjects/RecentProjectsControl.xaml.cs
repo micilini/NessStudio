@@ -31,69 +31,6 @@ namespace NessStudio.Components.RecentProjects
             this.DataContext = RecentProjectsControlVM;
         }
 
-        public async Task RefreshRecoveryAsync()
-        {
-            var options = ((App)Application.Current).Options;
-            string root = options.RecordingsDirectory;
-            IReadOnlyList<RecoveryCandidate> candidates;
-            using var deadline=new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(5));
-            try
-            {
-                var found = new List<RecoveryCandidate>();
-                foreach (string directory in new[] { root, Path.Combine(options.DocumentsDirectory, "Recordings") }.Distinct(StringComparer.OrdinalIgnoreCase))
-                    if (Directory.Exists(directory))
-                        found.AddRange(await RecoveryCatalog.ScanAsync(directory, deadline.Token).WaitAsync(TimeSpan.FromSeconds(5)));
-                candidates = found;
-            }
-            catch(Exception error)when(error is TimeoutException or OperationCanceledException)
-            {candidates=[new(root,root,"ScanPending","Recovery discovery is still waiting for storage. Files and pending resources were preserved; reopen the library to retry.",false)];}
-            RecoveryItemsPanel.Children.Clear();
-            RecoveryPanel.Visibility=candidates.Count==0?Visibility.Collapsed:Visibility.Visible;
-            foreach(var candidate in candidates.Take(16))
-            {
-                var row=new StackPanel{Margin=new Thickness(0,6,0,10)};
-                var status=new TextBlock{Text=Path.GetFileName(candidate.Directory)+": "+candidate.Message,Foreground=Brushes.LightGray,TextWrapping=TextWrapping.Wrap};
-                row.Children.Add(status);
-                if(candidate.FirstError is { } cause)row.Children.Add(new TextBlock{Text="Original error: "+cause,Foreground=Brushes.LightGray,TextWrapping=TextWrapping.Wrap});
-                foreach(var asset in candidate.AvailableAssets)
-                    row.Children.Add(new TextBlock{Text=asset.File+" — "+asset.Bytes.ToString("N0")+" bytes; "+(asset.NativeFinalized?"native finalization recorded":"partial or unverified"),Foreground=Brushes.LightGray,TextWrapping=TextWrapping.Wrap});
-                var actions=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(0,6,0,0)};
-                var browse=new Button{Content="Open recording folder",Margin=new Thickness(0,0,8,0)};
-                browse.Click+=(_,_)=>RecentProjectsControlVM.OpenInExplorer(candidate.Directory);
-                actions.Children.Add(browse);
-                if(candidate.Status=="RegistrationPending")
-                {
-                    var register=new Button{Content="Register finalized project",Margin=new Thickness(0,0,8,0)};
-                    register.Click+=async(_,_)=>
-                    {
-                        register.IsEnabled=false;
-                        try{await ProjectIngestService.ProcessAsync(candidate.Directory);await RecentProjectsControlVM.ReloadAsync();}
-                        catch(Exception error){status.Text=error.Message;register.IsEnabled=true;}
-                    };
-                    actions.Children.Add(register);
-                }
-                if(candidate.CanRecover)
-                {
-                    var recover=new Button{Content="Recover finalized recording"};
-                    recover.Click+=async(_,_)=>
-                    {
-                        recover.IsEnabled=false;
-                        try
-                        {
-                            status.Text="Validating and copying finalized tracks...";
-                            string folder=await RecoveryCatalog.RecoverAsync(candidate,new Progress<string>(message=>status.Text=message));
-                            var project=await ProjectIngestService.ProcessAsync(folder);
-                            status.Text="Recovered "+TimeSpan.FromMilliseconds(project.DurationMs).ToString(@"hh\:mm\:ss")+" of finalized media. Original files were preserved.";
-                            await RecentProjectsControlVM.ReloadAsync();
-                        }
-                        catch(Exception error){status.Text="Recovery did not complete: "+error.Message;recover.IsEnabled=true;}
-                    };
-                    actions.Children.Add(recover);
-                }
-                row.Children.Add(actions);RecoveryItemsPanel.Children.Add(row);
-            }
-        }
-
         public void RenderProjects(IEnumerable<ProjectsModel> items, bool clearFirst = true)
         {
             if (!Dispatcher.CheckAccess())
@@ -429,9 +366,9 @@ namespace NessStudio.Components.RecentProjects
             }
             catch (Exception ex)
             {
-                DebugLog.Write("[RecentProjects] OpenExportWindow ERROR:\n" + ex);
+                DebugLog.Write("[RecentProjects] OpenExportWindow ERROR:\n" + UserError.Details(ex));
                 MessageBox.Show(
-                    "Unable to open the export window.\n\n" + ex.Message,
+                    "Unable to open the export window.\n\n" + UserError.Message(ex),
                     "Export Recording",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);

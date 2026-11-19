@@ -34,7 +34,8 @@ public static class ProjectIngestService
             }
             // This is the explicit save/import path. Opening or listing projects does not write aliases.
             if(manifest.Version==3&&preview is not null&&manifest.Thumbnail is null)
-            {manifest.Thumbnail=Path.GetRelativePath(projectFolder,preview);ProjectManifestStore.WriteAliases(projectFolder,manifest,overwrite:true);}
+            {manifest.Thumbnail=Path.GetRelativePath(projectFolder,preview);if(manifest.Metadata is null)ProjectManifestStore.WriteAliases(projectFolder,manifest,overwrite:true);}
+            if (manifest.Metadata is not null) await ProjectMetadataStore.ConsolidateAsync(projectFolder, manifest);
             var track=manifest.HasProgram?manifest.Program:manifest.HasScreen?manifest.Screen:manifest.HasWebcam?manifest.Webcam:null;
             var model=new ProjectsModel{ProjectId=projectId,Title=new DirectoryInfo(projectFolder).Name,ProjectFolderPath=projectFolder,
                 ProjectFilePath=document.AuthorityPath,ThumbnailPath=preview??string.Empty,FileSizeBytes=FolderSize(projectFolder),DurationMs=manifest.DurationMs??0,
@@ -48,7 +49,7 @@ public static class ProjectIngestService
         catch(Exception error)
         {
             if(manifest.Version==3)
-            {try{ProjectManifestStore.RecordRegistration(projectFolder,projectId,false,error.Message);}catch(Exception metadataError){DebugLog.Write("[ProjectIngest] Registration recovery: "+metadataError);}}
+            {try{ProjectManifestStore.RecordRegistration(projectFolder,projectId,false,UserError.Message(error));}catch(Exception metadataError){DebugLog.Write("[ProjectIngest] Registration recovery: "+metadataError);}}
             throw;
         }
     }

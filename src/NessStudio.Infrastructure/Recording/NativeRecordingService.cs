@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Text.Json;
 using NessStudio.Diagnostics;
 using NessStudio.Interop.Native;
@@ -7,13 +7,15 @@ using NessStudio.Models;
 namespace NessStudio.Recording.Engines;
 
 /// <summary>Composes native control, bounded observation and final project metadata; never owns media buffers.</summary>
-internal sealed class NativeRecordingService(RecordingRequest request, string applicationDirectory, IDiagnosticLog log) : IRecordingService
+internal sealed class NativeRecordingService(RecordingRequest request, string applicationDirectory, IDiagnosticLog log,
+    Func<string, ulong>? availableSpace = null) : IRecordingService
 {
     internal static readonly string[] OwnedAssetNames = ["program.mkv", "program.mkv.manifest.json", "program.mkv.manifest.pending", "program.mkv.partial.manifest.json", "program.mkv.partial.manifest.pending", "screen.mkv", "screen.mkv.manifest.json", "screen.mkv.manifest.pending",
         "screen.mkv.partial.manifest.json", "screen.mkv.partial.manifest.pending", "mic.wav", "system.wav", "final.mkv",
         "manifest.json", "manifest.json.pending", "recording-native.json", "recording-native.json.pending", "native-export.json", "native-export.json.pending",
         "webcam.mkv", "webcam.mkv.manifest.json", "webcam.mkv.manifest.pending", "webcam.mkv.partial.manifest.json", "webcam.mp4",
         "webcam.mp4.partial.mp4", "webcam.mp4.export.json", "audio.native.json", "audio.native.json.pending", "native-camera-export.json",
+        "recording-startup-error.json", "recording-startup-error.json.pending",
         "native-camera-export.json.pending", "recording-incomplete.json", "recording-incomplete.json.pending", "session.manifest.json", "project-recovery.json", "project-registration.json"];
     internal NativeRecordingWorkspace? Workspace { get; set; }
     private RecordingCameraOptions? _camera;
@@ -29,6 +31,7 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
     private Exception? _failure;
     private int _state, _disposing;
     private bool _started;
+    private bool _supportsAudioGain;
     private string? _finalSnapshot;
     private RecordingStatistics _statistics = new(null, null, null);
     private readonly DateTimeOffset _created = DateTimeOffset.UtcNow;
@@ -47,20 +50,20 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
         if (Interlocked.Exchange(ref _state, (int)state) == (int)state && error is null) return;
         foreach (var handler in StateChanged?.GetInvocationList() ?? [])
             try { ((EventHandler<RecordingStateChangedEventArgs>)handler)(this, new(state, error)); }
-            catch (Exception observerError) { log.Write("[NativeRecording] Observer: " + observerError.Message); }
+            catch (Exception observerError) { log.Write("[NativeRecording] Observer: " + UserError.Message(observerError)); }
     }
     private void Fail(Exception error)
     {
         if (Interlocked.CompareExchange(ref _failure, error, null) is null)
         {
-            log.Write("[NativeRecording] Failed: " + error);
+            log.Write("[NativeRecording] Failed: " + UserError.Details(error));
             Publish(RecordingState.Failed, error);
         }
     }
     private void EnsureUsable()
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposing) != 0, this);
-        if (_failure is { } error) throw new InvalidOperationException("The native recording failed: " + error.Message, error);
+        if (_failure is { } error) throw new InvalidOperationException("The native recording failed: " + UserError.Message(error), error);
     }
     private static void Check(NativeCommandCompletion completion)
     {
@@ -96,12 +99,20 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
     }
     private async Task PrepareCoreAsync()
     {
+        RecordingStorageSpace.EnsureCanStart(request.OutputDirectory, availableSpace);
+        if (!float.IsFinite(request.MicrophoneGain) || request.MicrophoneGain is < 0 or > 1 ||
+            !float.IsFinite(request.SystemAudioGain) || request.SystemAudioGain is < 0 or > 1)
+            throw new ArgumentException("Recording audio gain must be between 0 and 1.");
         if ((request.Targets.AnyAudio || request.Targets.CaptureWebcam) && !File.Exists(Path.Combine(applicationDirectory, "Native", "FFmpeg", "ffmpeg.exe")))
             throw new FileNotFoundException("Screen/audio recording requires the packaged FFmpeg export dependency.");
         _engine = NativeEngine.Open(applicationDirectory, "NessStudio.MVVM");
         if (_engine.Build.AbiMinor < 8) throw new NotSupportedException("Native recording journals and recovery require libnessstudio ABI 1.8 or newer.");
         using var capabilities = _engine.GetCapabilities();
         var declared = capabilities.RootElement.GetProperty("declaredCapabilities");
+        _supportsAudioGain = declared.TryGetProperty("audioGain", out var gainCapability) && gainCapability.GetBoolean();
+        if (!_supportsAudioGain && ((request.Targets.MicDeviceId is not null && request.MicrophoneGain != 1) ||
+            (request.Targets.LoopbackDeviceId is not null && request.SystemAudioGain != 1)))
+            throw new NotSupportedException("The loaded native library does not support recording audio levels. Update the complete NessStudio package.");
         if (!declared.GetProperty("recording").GetBoolean() || !declared.GetProperty("fullSoftware").GetBoolean())
             throw new NotSupportedException("The loaded native library does not implement the required recording capabilities.");
         log.Write("[NativeRecording] capabilities=" + capabilities.RootElement.GetRawText());
@@ -161,8 +172,10 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
         };
         if (request.Crop is { } crop) capture["crop"] = new { x = crop.X, y = crop.Y, width = crop.Width, height = crop.Height, space = "global-physical" };
         var audio = new List<object>();
-        if (request.Targets.MicDeviceId is { } mic) audio.Add(new { kind = "microphone", endpointId = mic, path = Path.Combine(request.OutputDirectory, "mic.wav") });
-        if (request.Targets.LoopbackDeviceId is { } loopback) audio.Add(new { kind = "loopback", endpointId = loopback, path = Path.Combine(request.OutputDirectory, "system.wav") });
+        object AudioSource(string kind, string endpointId, string path, float gain) => _supportsAudioGain
+            ? new { kind, endpointId, path, gain } : (object)new { kind, endpointId, path };
+        if (request.Targets.MicDeviceId is { } mic) audio.Add(AudioSource("microphone", mic, Path.Combine(request.OutputDirectory, "mic.wav"), request.MicrophoneGain));
+        if (request.Targets.LoopbackDeviceId is { } loopback) audio.Add(AudioSource("loopback", loopback, Path.Combine(request.OutputDirectory, "system.wav"), request.SystemAudioGain));
         var controls = new Dictionary<string, object?>
         {
             ["version"] = 1, ["interactive"] = true, ["capture"] = capture,
@@ -261,7 +274,8 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
     public Task StartAsync() => CommandAsync(RecordingState.Starting, RecordingState.Recording, s => s.StartAsync(), RecordingState.Ready);
     public Task PauseAsync() => CommandAsync(RecordingState.Pausing, RecordingState.Paused, s => s.PauseAsync(), RecordingState.Recording);
     public Task ResumeAsync() => CommandAsync(RecordingState.Resuming, RecordingState.Recording, s => s.ResumeAsync(), RecordingState.Paused);
-    public async Task StopAsync()
+    public Task StopAsync() => StopCoreAsync(null);
+    private async Task StopCoreAsync(IProgress<RecordingSaveProgress>? progress)
     {
         await _control.WaitAsync().ConfigureAwait(false);
         try
@@ -269,13 +283,13 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
             ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposing) != 0, this);
             if (_finalSnapshot is not null || Result is not null) return;
             Publish(RecordingState.Stopping);
-            await CloseSessionAsync().ConfigureAwait(false);
+            await CloseSessionAsync(progress: progress).ConfigureAwait(false);
             Publish(RecordingState.Finalizing);
         }
         catch (Exception error) { Fail(error); throw; }
         finally { _control.Release(); }
     }
-    private async Task CloseSessionAsync(bool endObservation = true)
+    private async Task CloseSessionAsync(bool endObservation = true, IProgress<RecordingSaveProgress>? progress = null)
     {
         if (endObservation)
         {
@@ -284,15 +298,51 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
         }
         if (_session is null || _finalSnapshot is not null) return;
         Workspace?.RecordingEnded(_session);
-        using var final = await _session.CloseAsync().ConfigureAwait(false);
+        var elapsed = Stopwatch.StartNew();
+        var closing = _session.CloseAsync();
+        // Accepted native writes must complete before ownership is released.
+        // Keep presentation alive during a slow disk without cancelling valid
+        // media or claiming a percentage that the storage API cannot provide.
+        while (progress is not null && !closing.IsCompleted)
+        {
+            if (await Task.WhenAny(closing, Task.Delay(1000)).ConfigureAwait(false) == closing) break;
+            bool writing = false;
+            try
+            {
+                using var pending = _session.GetSnapshot();
+                if (pending.RootElement.TryGetProperty("journalDiagnostics", out var journal) &&
+                    journal.TryGetProperty("durableWriter", out var writer) && writer.ValueKind == JsonValueKind.Object)
+                    writing = writer.GetProperty("active").GetBoolean() || writer.GetProperty("pending").GetBoolean();
+            }
+            catch (ObjectDisposedException) when (closing.IsCompleted) { break; }
+            progress.Report(new()
+            {
+                Title = "Saving Recording...",
+                Message = writing
+                    ? $"Waiting for Windows to finish writing... ({elapsed.Elapsed.TotalSeconds:0}s)"
+                    : $"Closing recording and pending writes... ({elapsed.Elapsed.TotalSeconds:0}s)",
+                IsIndeterminate = true, CurrentStep = 1, TotalSteps = 8
+            });
+        }
+        using var final = await closing.ConfigureAwait(false);
         _finalSnapshot = final.RootElement.GetRawText();
         _stoppedUtc = DateTimeOffset.UtcNow;
         ObserveSnapshot(final.RootElement);
         if (SnapshotError(final.RootElement) is { } error && _started) Fail(error);
+        if (!_started && _failure is { } preparationError)
+        {
+            try
+            {
+                NativeSessionManifestReader.WriteAtomic(Path.Combine(request.OutputDirectory, "recording-startup-error.json"),
+                    new { version = 1, status = "Failed", started = false, projectComplete = false,
+                        error = UserError.Message(preparationError), nativeSnapshot = final.RootElement });
+            }
+            catch (Exception diagnosticError) { log.Write("[NativeRecording] Startup diagnostics: " + UserError.Details(diagnosticError)); }
+        }
     }
     public async Task<string> StopAndFinalizeAsync(IProgress<RecordingSaveProgress>? progress = null)
     {
-        await StopAsync().ConfigureAwait(false);
+        await StopCoreAsync(progress).ConfigureAwait(false);
         await _control.WaitAsync().ConfigureAwait(false);
         SessionManifest? recoveryManifest = null;
         try
@@ -303,10 +353,13 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
             var finalization = Stopwatch.StartNew();
             using var snapshot = JsonDocument.Parse(_finalSnapshot);
             if (!snapshot.RootElement.GetProperty("mediaComplete").GetBoolean()) throw new InvalidDataException("Native media was not finalized; partial assets are preserved.");
-            Report(progress, "Closing native media...", 70);
+            Report(progress, "Reading captured track metadata...", 70);
             bool hasProgram = request.Targets.AnyVideo && request.OutputMode != RecordingOutputMode.SeparateSources;
             bool hasRaw = request.OutputMode != RecordingOutputMode.Program;
-            string primary = Path.Combine(request.OutputDirectory, hasProgram ? "program.mkv" : request.Targets.CaptureScreen ? "screen.mkv" : request.Targets.CaptureWebcam ? "webcam.mkv" : "final.mkv");
+            // Recording saves its original tracks. Conversion and composition
+            // belong to the explicit Export workflow, never to Stop/Save.
+            string primary = Path.Combine(request.OutputDirectory, hasProgram ? "program.mkv" : request.Targets.CaptureScreen ? "screen.mkv"
+                : request.Targets.CaptureWebcam ? "webcam.mkv" : request.Targets.CaptureMic ? "mic.wav" : "system.wav");
             string nativeManifest = request.Targets.AnyVideo ? primary + ".manifest.json" : Path.Combine(request.OutputDirectory,"audio.native.json");
             var manifest = NativeSessionManifestReader.Read(nativeManifest, request.OutputDirectory, request.Targets,
                 camera: !hasProgram && !request.Targets.CaptureScreen && request.Targets.CaptureWebcam, program: hasProgram);
@@ -329,33 +382,23 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
                         throw new InvalidDataException("Independent camera and program duration do not share the finalized cut.");
                     manifest.HasWebcam = true; manifest.Webcam = independent.Webcam;
                 }
-                string effectiveCamera = await RunExportAsync("camera-remux",cameraManifest,Path.Combine(request.OutputDirectory,"webcam.mp4"),"native-camera-export.json").ConfigureAwait(false);
-                manifest.Webcam.File = Path.GetFileName(effectiveCamera); manifest.Webcam.ContainerKind = "mp4";
-                if (!hasProgram && !request.Targets.CaptureScreen) primary = effectiveCamera;
             }
             manifest.RecordingMode=request.OutputMode.ToString(); manifest.Scene=_scene;
             if (snapshot.RootElement.GetProperty("metrics").TryGetProperty("sharedScene",out var sharedScene)) manifest.SceneHistory=sharedScene.GetProperty("history").Clone();
-            if (request.Targets.AnyAudio)
-            {
-                Report(progress, "Combining screen and audio...", 75);
-                await RunExportAsync(request.Targets.AnyVideo ? "av-basic" : "audio-basic", nativeManifest,
-                    Path.Combine(request.OutputDirectory,"final.mkv"),"native-export.json").ConfigureAwait(false);
-                primary = Path.Combine(request.OutputDirectory, "final.mkv");
-            }
             Report(progress, "Persisting recording metadata...", 85);
             manifest.CreatedAt = _created; manifest.StartedAtUtc = _startedUtc; manifest.StoppedAtUtc = _stoppedUtc;
             manifest.NativeSelection = Selection; manifest.PrimaryAsset = Path.GetFileName(primary);
             ProjectManifestStore.UpgradeNewRecording(manifest,request.OutputDirectory,"libnessstudio/"+_engine!.Build.Build);
-            ProjectRecoveryService.Stage(request.OutputDirectory,manifest);
-            NativeSessionManifestReader.WriteAtomic(Path.Combine(request.OutputDirectory, "recording-native.json"), new
+            ProjectMetadataStore.SetDocument(manifest, "recording-native.json", JsonSerializer.SerializeToElement(new
             {
                 version = 1, backend = Capabilities.Backend, build = _engine!.Build, selection = Selection,
                 request = new { request.ExecutionMode, request.OutputMode, scene = _scene, request.Crop, request.Targets.Screen, camera = _camera, request.Targets.MicDeviceId, request.Targets.LoopbackDeviceId },
-                snapshot = snapshot.RootElement
-            });
-            ProjectManifestStore.WriteAliases(request.OutputDirectory, manifest);
-            ProjectManifestStore.RecordRegistration(request.OutputDirectory,manifest.ProjectId!,false,"Finalized native project is awaiting library registration.");
-            ProjectRecoveryService.Resolve(request.OutputDirectory,manifest.ProjectId!);
+                automaticExport = false, finalizationNotice = (string?)null, snapshot = snapshot.RootElement
+            }));
+            manifest.Metadata!.Registration = JsonSerializer.SerializeToElement(new { version = 1, projectId = manifest.ProjectId,
+                registered = false, recoverable = true, sourceAssetsPreserved = true, error = "Finalized native project is awaiting library registration." });
+            manifest.Metadata.Recovery = JsonSerializer.SerializeToElement(new { version = 1, resolved = true, projectId = manifest.ProjectId, sourceAssetsPreserved = true });
+            ProjectMetadataStore.Consolidate(request.OutputDirectory, manifest);
             Volatile.Write(ref _statistics, new(TimeSpan.FromMilliseconds(manifest.DurationMs!.Value), manifest.HasProgram ? manifest.Program!.FrameCount : manifest.HasScreen ? manifest.Screen.FrameCount : manifest.HasWebcam ? manifest.Webcam.FrameCount : null, finalization.Elapsed));
             Result = new(request.OutputDirectory, primary, Path.Combine(request.OutputDirectory, "manifest.json"), Capabilities.Backend, Statistics, Selection,
                 manifest.HasWebcam ? Path.Combine(request.OutputDirectory,manifest.Webcam.File) : null);
@@ -374,7 +417,7 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
                         recoveryManifest.PrimaryAsset ??= recoveryManifest.Program?.File ?? recoveryManifest.Screen?.File ?? recoveryManifest.Webcam?.File ?? recoveryManifest.Mic?.File ?? recoveryManifest.System?.File;
                         ProjectManifestStore.UpgradeNewRecording(recoveryManifest,request.OutputDirectory,"libnessstudio/"+_engine!.Build.Build);
                     }
-                    ProjectRecoveryService.Stage(request.OutputDirectory,recoveryManifest,error.Message);
+                    ProjectRecoveryService.Stage(request.OutputDirectory,recoveryManifest,UserError.Message(error));
                 }
                 catch(Exception recoveryError){log.Write("[NativeRecording] Recovery metadata: "+recoveryError);}
             }
@@ -384,24 +427,13 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
                 try
                 {
                     if (!File.Exists(partial)) NativeSessionManifestReader.WriteAtomic(partial,new { version=1,status="Failed",
-                        projectComplete=false,sourceAssetsPreserved=true,error=error.Message,nativeSnapshot=JsonSerializer.Deserialize<JsonElement>(_finalSnapshot) });
+                        projectComplete=false,sourceAssetsPreserved=true,error=UserError.Message(error),nativeSnapshot=JsonSerializer.Deserialize<JsonElement>(_finalSnapshot) });
                 }
                 catch (Exception metadataError) { log.Write("[NativeRecording] Incomplete metadata: " + metadataError); }
             }
             throw;
         }
         finally { _control.Release(); }
-    }
-    private async Task<string> RunExportAsync(string profile,string nativeManifest,string output,string receipt)
-    {
-        await using var job = _engine!.CreateJob(JsonSerializer.SerializeToElement(new { version=1,type="export",profile,
-            sessionManifestPath=nativeManifest,ffmpegPath=Path.Combine(applicationDirectory,"Native","FFmpeg","ffmpeg.exe"),outputPath=output }));
-        using var result = await job.RunAsync().ConfigureAwait(false);
-        NativeSessionManifestReader.WriteAtomic(Path.Combine(request.OutputDirectory,receipt),result.RootElement);
-        if (result.RootElement.GetProperty("state").GetInt32()!=105) throw new InvalidDataException("Native " + profile + " failed: " + result.RootElement.GetRawText());
-        string effective = Path.GetFullPath(result.RootElement.GetProperty("outputPath").GetString()!);
-        if (!string.Equals(effective,output,StringComparison.OrdinalIgnoreCase) || !File.Exists(effective)) throw new InvalidDataException("Native export returned an unexpected finalized path.");
-        return effective;
     }
     private static void Report(IProgress<RecordingSaveProgress>? progress, string message, int percent) =>
         progress?.Report(new() { Title = "Saving Recording...", Message = message, Percent = percent, CurrentStep = 6, TotalSteps = 8 });
@@ -431,6 +463,6 @@ internal sealed class NativeRecordingService(RecordingRequest request, string ap
     private async Task ObserveReleaseAsync()
     {
         try { await DisposeAsync().ConfigureAwait(false); }
-        catch (Exception error) { log.Write("[NativeRecording] Cleanup failed: " + error); }
+        catch (Exception error) { log.Write("[NativeRecording] Cleanup failed: " + UserError.Details(error)); }
     }
 }

@@ -36,7 +36,7 @@ internal sealed class LegacyRecordingService(IRecorderEngine backend, RecordingC
         foreach (var handler in StateChanged?.GetInvocationList() ?? [])
         {
             try { ((EventHandler<RecordingStateChangedEventArgs>)handler)(this, notification); }
-            catch (Exception ex) { DebugLog.Write("[RecordingService] observer failed: " + ex.Message); }
+            catch (Exception ex) { DebugLog.Write("[RecordingService] observer failed: " + UserError.Message(ex)); }
         }
     }
 
@@ -142,6 +142,6 @@ internal sealed class LegacyRecordingService(IRecorderEngine backend, RecordingC
     private static async Task ObserveCleanupAsync(Task cleanup)
     {
         try { await cleanup.ConfigureAwait(false); }
-        catch (Exception ex) { DebugLog.Write("[RecordingService] cleanup failed: " + ex); }
+        catch (Exception ex) { DebugLog.Write("[RecordingService] cleanup failed: " + UserError.Details(ex)); }
     }
 }

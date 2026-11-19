@@ -4,6 +4,7 @@
 #include "sinc_kernel.hpp"
 #include "packet_queue.hpp"
 #include "clock_rate.hpp"
+#include "ness_buffered_io.hpp"
 #include "capture/capture.hpp"
 #include <windows.h>
 // clang-format off
@@ -141,17 +142,37 @@ class Wave {
   size_t tail_begin_{},tail_count_{};
   std::vector<int16_t> block_;
   uint64_t committed_{}, total_{}, ramp_{};
-  int64_t maximum_write_hns_{};
   bool finalized_{};
-  void io(const void *data, DWORD size) {
-    const auto started = qpc_hns();
+  float output_gain_{1};
+  std::unique_ptr<nessmuxer::io::BufferedWrites> writes_;
+  uint64_t file_position_{};
+#ifdef NSS_AUDIO_QUALIFICATION
+  uint32_t qualification_open_stall_ms_{};
+  uint32_t qualification_write_stall_ms_{};
+#endif
+  void write_at(uint64_t offset, std::span<const uint8_t> bytes) {
+    LARGE_INTEGER at{}; at.QuadPart = static_cast<LONGLONG>(offset);
+    if (!SetFilePointerEx(file_, at, nullptr, FILE_BEGIN))
+      throw Error(NSS_E_IO, NSS_STAGE_STORAGE, HRESULT_FROM_WIN32(GetLastError()), "WAV seek failed");
+#ifdef NSS_AUDIO_QUALIFICATION
+    if (const auto delay = std::exchange(qualification_write_stall_ms_, 0u))
+      std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+#endif
     DWORD done{};
-    const bool written = WriteFile(file_, data, size, &done, nullptr) != FALSE;
+    const auto size = static_cast<DWORD>(bytes.size());
+    const bool written = WriteFile(file_, bytes.data(), size, &done, nullptr) != FALSE;
     const auto error = written ? (done == size ? ERROR_SUCCESS : ERROR_WRITE_FAULT) : GetLastError();
-    maximum_write_hns_ = (std::max)(maximum_write_hns_, qpc_hns() - started);
     if (error != ERROR_SUCCESS)
       throw Error(NSS_E_IO, NSS_STAGE_STORAGE,
                   HRESULT_FROM_WIN32(error), "WAV write failed");
+  }
+  void io(const void *data, DWORD size) {
+    try { writes_->write(file_position_, {static_cast<const uint8_t *>(data), size}); }
+    catch (const nessmuxer::io::BufferFull &) {
+      throw Error(NSS_E_BACKPRESSURE, NSS_STAGE_STORAGE, 0,
+          "Recording storage backlog exceeded its 8 MiB audio output buffer");
+    }
+    file_position_ += size;
   }
   void flush() {
     if (!block_.empty()) {
@@ -173,21 +194,34 @@ public:
     return {72 + samples * 4, samples * 4, samples};
   }
 #ifdef NSS_AUDIO_QUALIFICATION
+  void set_open_stall_for_test(uint32_t milliseconds) { qualification_open_stall_ms_ = milliseconds; }
+  void set_write_stall_for_test(uint32_t milliseconds) { qualification_write_stall_ms_ = milliseconds; }
   void invalidate_for_test() {
+    writes_->drain();
     CloseHandle(std::exchange(file_, INVALID_HANDLE_VALUE));
   }
 #endif
   ~Wave() {
+    if (writes_) { try { writes_->finish(); } catch (...) {} }
     if (file_ != INVALID_HANDLE_VALUE)
       CloseHandle(file_);
   }
-  void open(const std::string &path) {
+  void open(const std::string &path, float gain = 1) {
+    if (!std::isfinite(gain) || gain < 0 || gain > 1)
+      throw std::invalid_argument("Recording audio gain must be between 0 and 1");
+    output_gain_ = gain;
+#ifdef NSS_AUDIO_QUALIFICATION
+    if (qualification_open_stall_ms_)
+      std::this_thread::sleep_for(std::chrono::milliseconds(qualification_open_stall_ms_));
+#endif
     file_ = CreateFileW(wide(path).c_str(), GENERIC_READ | GENERIC_WRITE, 0,
                         nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (file_ == INVALID_HANDLE_VALUE)
       throw Error(NSS_E_IO, NSS_STAGE_STORAGE,
                   HRESULT_FROM_WIN32(GetLastError()),
                   "Cannot create exclusive WAV");
+    writes_ = std::make_unique<nessmuxer::io::BufferedWrites>(8 * 1024 * 1024,
+        [this](uint64_t offset, std::span<const uint8_t> bytes) { write_at(offset, bytes); });
     std::array<uint8_t, 80> h{};
     auto put = [&](size_t o, auto v) {
       std::memcpy(h.data() + o, &v, sizeof(v));
@@ -209,12 +243,22 @@ public:
     io(h.data(), static_cast<DWORD>(h.size()));
   }
   uint64_t count() const { return total_; }
-  double maximum_write_ms() const { return double(maximum_write_hns_) / 10000; }
+  double maximum_write_ms() const { return writes_ ? writes_->stats().maximum_write_ms : 0; }
+  Json storage_report() const {
+    const auto stats = writes_ ? writes_->stats() : nessmuxer::io::BufferedWrites::Stats{};
+    return {{"capacityBytes", stats.capacity_bytes}, {"pendingBytes", stats.pending_bytes},
+            {"peakPendingBytes", stats.peak_pending_bytes}, {"submittedBytes", stats.submitted_bytes},
+            {"completedBytes", stats.completed_bytes}, {"maximumWriteMs", stats.maximum_write_ms},
+            {"workerThreads", 1}, {"timelineChanged", false}};
+  }
+  void check() const { if (writes_) writes_->check(); }
   void append(std::array<float, 2> frame) {
     const float gain =
         static_cast<float>((std::min)(++ramp_, uint64_t{96})) / 96.f;
-    for (auto &v : frame)
+    for (auto &v : frame) {
       v *= gain;
+      v *= output_gain_;
+    }
     ++total_;
     if(tail_count_==tail_.size()) {
       commit(tail_[tail_begin_]);
@@ -244,6 +288,7 @@ public:
     end_segment();
     silence_until(samples);
     flush();
+    writes_->drain();
     // A late Stop/pause cut can retract the bounded last packet; the clock owns
     // the cut.
     total_ = samples;
@@ -272,13 +317,17 @@ public:
                                    double(n - 1 - i) / double(n));
       hr(SetFilePointerEx(file_, p, nullptr, FILE_BEGIN) ? S_OK : E_FAIL,
          "WAV tail seek failed");
+      file_position_ = static_cast<uint64_t>(p.QuadPart);
       io(last.data(), static_cast<DWORD>(n * 4));
+      writes_->drain();
     }
     const auto lengths = sizes(samples);
     p.QuadPart = 20;
     hr(SetFilePointerEx(file_, p, nullptr, FILE_BEGIN) ? S_OK : E_FAIL,
        "RF64 seek failed");
+    file_position_ = 20;
     io(lengths.data(), 24);
+    writes_->finish();
     if (!FlushFileBuffers(file_))
       hr(HRESULT_FROM_WIN32(GetLastError()), "WAV flush failed");
     const auto f = std::exchange(file_, INVALID_HANDLE_VALUE);
@@ -326,8 +375,12 @@ public:
       // Accept at most 1ms here, once, only with the initial discontinuity flag.
       const bool initial_cut = initial_discontinuity_ && converted >= previous_frames_ &&
                                converted - previous_frames_ <= client_rate_ / 1000;
-      const bool correlated = valid && previous_valid_ && qpc >= previous_qpc_ &&
-          std::abs(double(qpc - previous_qpc_) - double(delta) * hns_per_second / endpoint_rate_) <= 20000;
+      // Initial clock-domain selection needs the same bounded jitter tolerance
+      // as placement. A noisy second QPC must not misclassify endpoint ticks as
+      // PCM frames when the packet sample counts prove the conversion ratio.
+      const bool correlated = valid && previous_valid_ &&
+          std::abs(double(static_cast<int64_t>(qpc) - static_cast<int64_t>(previous_qpc_)) -
+                   double(delta) * hns_per_second / endpoint_rate_) <= 700000;
       if (delta != previous_frames_ && (regular || initial_cut) && correlated) {
         position_rate_ = endpoint_rate_;
         if (initial_cut) { anchor_raw_ = raw; anchor_pcm_ = next_pcm_; }
@@ -392,27 +445,57 @@ class Stream {
   std::vector<uint32_t> above_pcm_zero_prefix_;
   uint64_t base_{}, next_device_{}, packets_{}, captured_{},
       silent_{}, discontinuities_{}, paused_samples_{}, gap_samples_{},
-      timestamp_errors_{}, idle_samples_{};
+      timestamp_errors_{}, idle_samples_{}, continuous_timing_discontinuities_{};
   int64_t last_qpc_{}, last_valid_qpc_{};
+  int64_t maximum_timestamp_residual_hns_{}, last_clock_observation_qpc_{};
+  uint64_t smoothed_timestamp_packets_{}, rejected_clock_observations_{};
+  double timestamp_fraction_hns_{};
   ClockRate clock_rate_;
   PacketPosition packet_position_;
   uint64_t last_valid_position_{}, previous_frames_{}, idle_intervals_{},
       lost_samples_{}, terminal_pad_{}, keepalive_frames_{}, exact_silence_outputs_{},
       pcm_zero_outputs_{}, filtered_outputs_{};
-  double phase_{}, ppm_{}, observed_ppm_{};
+  double phase_{}, ppm_{}, observed_ppm_{}, maximum_observed_absolute_ppm_{};
+  uint64_t limited_correction_packets_{};
   uint64_t segment_{~uint64_t{}};
   bool segment_open_{}, loopback_{};
   uint32_t rate_{};
   std::optional<SincKernel> kernel_;
   int64_t last_report_at_{};
   uint64_t report_publications_{};
+  Json clock_report() const {
+    return {{"method", "centered rolling device-position/QPC regression"},
+            {"maximumWindowSeconds", 30}, {"observationLimit", 640},
+            {"momentRebuildEveryObservations", 256},
+            {"observations", clock_rate_.observations()}, {"spanSeconds", clock_rate_.span_seconds()},
+            {"rawTimestampsChanged", false}, {"correctionBudgetPpm", 200},
+            {"limitedCorrectionPackets", limited_correction_packets_},
+            {"maximumObservedAbsolutePpm", maximum_observed_absolute_ppm_},
+            {"excessEstimatePolicy", "Limit correction and retain diagnostics; sample continuity and bounded clock divergence determine capture validity"}};
+  }
+  Json timestamp_report() const {
+    return {{"method", "Continuous device samples determine placement; raw QPC observations remain diagnostic"},
+            {"smoothingToleranceMs", 70}, {"clockObservationOutlierThresholdMs", 2},
+            {"smoothedPackets", smoothed_timestamp_packets_},
+            {"rejectedClockObservations", rejected_clock_observations_},
+            {"maximumRawResidualMs", double(maximum_timestamp_residual_hns_) / 10000},
+            {"rawPacketTimestampsPreserved", true}};
+  }
+  std::atomic<int64_t> file_preparation_hns_{}, endpoint_preparation_started_{}, endpoint_preparation_hns_{};
+  Json preparation_report() const {
+    return {{"filePreparationMs", double(file_preparation_hns_.load()) / 10000},
+            {"endpointPreparationMs", double(endpoint_preparation_hns_.load()) / 10000},
+            {"endpointDeadlineMs", 3000},
+            {"deadlineScope", "Audio device initialization; output file I/O completes before this wait"}};
+  }
   Json handoff_report() const {
     const auto stats = packet_queue_ ? packet_queue_->stats() : PacketQueue::Stats{};
     return {{"captureBufferFrames", capture_buffer_frames_},
             {"queuedFrames", stats.queued_frames}, {"peakQueuedFrames", stats.peak_frames},
             {"queuedPackets", stats.queued_packets}, {"peakQueuedPackets", stats.peak_packets},
             {"pushedPackets", stats.pushed}, {"processedOrInProgressPackets", stats.popped},
-            {"allocatedQueueBytes", stats.bytes}, {"pendingDurationLimitMs", 500},
+            {"allocatedQueueBytes", stats.bytes}, {"pendingDurationLimitMs", packet_queue_
+                ? packet_queue_->pending_duration_limit_ms() : PacketQueue::recording_pending_ms},
             {"packetDurationLimitMs", 200}, {"processingThreadsMax", 1},
             {"captureServiceGapMaxMs", double(capture_service_gap_max_hns_.load()) / 10000},
             {"packetProcessingMaxMs", double(processing_max_hns_) / 10000},
@@ -433,6 +516,7 @@ class Stream {
                {"outputRate", 48000},
                {"outputChannels", 2},
                {"outputFormat", "pcm_s16le_rf64"},
+               {"gain", plan_.value("gain", 1.f)},
                {"channelMapping", format.channels == 1
                                       ? "mono duplicated to L/R"
                                       : "L/R preserved"},
@@ -443,6 +527,8 @@ class Stream {
                {"regularReportIntervalMs", 1000},
                {"reportPublicationCount", report_publications_},
                {"packetHandoff", handoff_report()},
+               {"storageWrites", wave_.storage_report()},
+               {"preparation", preparation_report()},
                {"packetTimestamps", packet_timestamps_},
                {"recentPacketTimestamps", recent_timestamps_},
                {"packets", packets_},
@@ -452,15 +538,13 @@ class Stream {
                {"pausedInputSamplesRemoved", paused_samples_},
                {"deviceGapSamples", gap_samples_},
                {"discontinuities", discontinuities_},
+               {"discontinuityFlagsWithContinuousTiming", continuous_timing_discontinuities_},
                {"timestampErrors", timestamp_errors_},
+               {"timestampPlacement", timestamp_report()},
                {"initialOrLoopbackIdleSilenceSamples", idle_samples_},
                {"driftCorrectionPpm", ppm_},
                {"observedDriftPpm", observed_ppm_},
-               {"clockRateEstimator", {{"method", "centered rolling device-position/QPC regression"},
-                    {"maximumWindowSeconds",30},{"observationLimit",640},
-                    {"momentRebuildEveryObservations",256},
-                    {"observations",clock_rate_.observations()},{"spanSeconds",clock_rate_.span_seconds()},
-                    {"rawTimestampsChanged",false}}},
+               {"clockRateEstimator", clock_report()},
                {"loopbackNoPacketIdleIntervals", idle_intervals_},
                {"lostSamples", lost_samples_},
                {"terminalAlignmentSilenceSamples", terminal_pad_},
@@ -562,6 +646,7 @@ class Stream {
       throw Error(NSS_E_IO, NSS_STAGE_AUDIO, 0,
                   "WASAPI QPC timestamp exceeds signed 100ns domain");
     const auto raw_position = position;
+    const auto raw_qpc = qpc;
     position = packet_position_.map(position, frames, qpc,
         (flags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY) != 0,
         (flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR) == 0);
@@ -578,7 +663,40 @@ class Stream {
       if (timestamp_errors_ > 3)
         throw Error(NSS_E_IO, NSS_STAGE_AUDIO, 0,
                     "Repeated WASAPI timestamp errors");
+    }
+    const bool position_gap = next_device_ && position != next_device_;
+    const bool observed_loopback_idle = loopback_ && observed_idle_hns >= 300000;
+    bool reliable_clock_observation = !(flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR);
+    if (last_qpc_ && !position_gap && !observed_loopback_idle) {
+      // Packet QPC values can jitter even without TIMESTAMP_ERROR. Device
+      // positions prove whether PCM is missing. Keep contiguous samples on a
+      // sample-count timeline instead of opening a false hole at every jitter.
+      // Accumulate only the fractional delta, avoiding precision loss from
+      // repeatedly adding small floating-point values to a large QPC epoch.
+      const double delta = double(previous_frames_) * hns_per_second /
+          (rate_ * (1.0 + ppm_ * 1e-6)) + timestamp_fraction_hns_;
+      const auto whole_delta = static_cast<int64_t>(std::llround(delta));
+      if (last_qpc_ > (std::numeric_limits<int64_t>::max)() - whole_delta)
+        throw Error(NSS_E_IO, NSS_STAGE_AUDIO, 0, "Audio placement timestamp overflow");
+      const int64_t expected = last_qpc_ + whole_delta;
+      const int64_t residual = static_cast<int64_t>(qpc) - expected;
+      const auto magnitude = std::abs(residual);
+      maximum_timestamp_residual_hns_ = (std::max)(maximum_timestamp_residual_hns_, magnitude);
+      if (magnitude <= 700000) {
+        if (residual) ++smoothed_timestamp_packets_;
+        qpc = static_cast<uint64_t>(expected);
+        timestamp_fraction_hns_ = delta - whole_delta;
+        // Never train a rate estimate on a scheduling/timestamp spike or on
+        // an extrapolated value. The original packet timestamp stays logged.
+        if (magnitude > 20000) reliable_clock_observation = false;
+      } else {
+        throw Error(NSS_E_IO, NSS_STAGE_AUDIO, 0,
+                    "Audio clock correlation exceeds the bounded 70 ms smoothing tolerance");
+      }
     } else {
+      timestamp_fraction_hns_ = 0;
+    }
+    if (!(flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR)) {
       last_valid_qpc_ = static_cast<int64_t>(qpc);
       last_valid_position_ = position;
     }
@@ -589,7 +707,6 @@ class Stream {
         last_qpc_ && static_cast<int64_t>(qpc) - last_qpc_ -
                              sample_time(previous_frames_, rate_) >
                          200000;
-    const bool position_gap = next_device_ && position != next_device_;
     if (position_gap || qpc_gap) {
       if (position < next_device_)
         throw Error(NSS_E_IO, NSS_STAGE_AUDIO, 0,
@@ -613,25 +730,40 @@ class Stream {
       ++idle_intervals_;
       flush_segment(next_device_, true);
       clock_rate_.reset();
+      last_clock_observation_qpc_ = 0;
     }
     if ((flags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY) && packets_ &&
-        !(loopback_ && observed_idle_hns >= 300000))
-      throw Error(NSS_E_IO, NSS_STAGE_AUDIO, 0,
-                  "Audio reported an unexplained discontinuity after its "
-                  "initial baseline");
+        !(loopback_ && observed_idle_hns >= 300000)) {
+      // WASAPI can flag a driver glitch even when the supplied device position
+      // and QPC remain continuous. Preserve that diagnostic, and retain the
+      // original PCM/timing without manufacturing silence or resetting phase.
+      // Actual position/QPC gaps still fail above. An uncertain timestamp
+      // cannot establish continuity and must not take this recovery path.
+      if (flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR)
+        throw Error(NSS_E_IO, NSS_STAGE_AUDIO, 0,
+                    "Audio discontinuity has an uncertain timestamp");
+      ++continuous_timing_discontinuities_;
+    }
     if (flags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY)
       ++discontinuities_;
     if (flags & AUDCLNT_BUFFERFLAGS_SILENT)
       silent_ += frames;
     // Extrapolated timestamps may preserve a bounded damaged packet, but must
     // not train the estimator from its own previous correction.
-    if (!(flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR) && packet_position_.selected())
-      clock_rate_.observe(raw_position, static_cast<int64_t>(qpc), packet_position_.rate());
+    if (reliable_clock_observation && static_cast<int64_t>(raw_qpc) >= last_clock_observation_qpc_ && packet_position_.selected()) {
+      clock_rate_.observe(raw_position, static_cast<int64_t>(raw_qpc), packet_position_.rate());
+      last_clock_observation_qpc_ = static_cast<int64_t>(raw_qpc);
+    } else if (!(flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR)) {
+      ++rejected_clock_observations_;
+    }
     if (const auto measured=clock_rate_.ppm()) {
       observed_ppm_ = *measured;
-      if (clock_rate_.span_seconds() >= 5 && std::abs(observed_ppm_) > 200)
-        throw Error(NSS_E_IO, NSS_STAGE_AUDIO, 0,
-                    "Audio clock drift exceeds +/-200 ppm correction budget");
+      maximum_observed_absolute_ppm_ = (std::max)(maximum_observed_absolute_ppm_, std::abs(observed_ppm_));
+      // A short-window rate estimate can react strongly to a small driver QPC
+      // offset without any missing PCM. Bound the resampler correction, rather
+      // than turning that estimate alone into a recording failure. Device gaps
+      // and actual placement/QPC divergence are independently checked above.
+      if (std::abs(observed_ppm_) > 200) ++limited_correction_packets_;
       const double desired = std::clamp(observed_ppm_, -200.0, 200.0);
       const double slew =
           20.0 * double(static_cast<int64_t>(qpc) - last_qpc_) / hns_per_second;
@@ -727,7 +859,8 @@ class Stream {
                             raw, nullptr),
          "WASAPI shared initialization failed");
       hr(client->GetBufferSize(&capture_buffer_frames_), "Capture capacity unavailable");
-      packet_queue_ = std::make_unique<PacketQueue>(format.rate, format.align);
+      packet_queue_ = std::make_unique<PacketQueue>(format.rate, format.align,
+          PacketQueue::recording_pending_ms);
       HANDLE event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
       if (!event)
         hr(HRESULT_FROM_WIN32(GetLastError()), "Audio event allocation failed");
@@ -772,7 +905,7 @@ class Stream {
            "Keepalive prefill release failed");
         keepalive_frames_ += keep_capacity;
       }
-      wave_.open(plan_.at("path"));
+      endpoint_preparation_hns_ = qpc_hns() - endpoint_preparation_started_.load();
       publish(format);
       {
         std::unique_lock lock(mutex_);
@@ -819,7 +952,7 @@ class Stream {
 #ifdef NSS_AUDIO_QUALIFICATION
             if (qualification_stall_ && !qualification_stall_done_ && packets_ >= 50) {
               qualification_stall_done_ = true;
-              std::this_thread::sleep_for(std::chrono::milliseconds(250));
+              std::this_thread::sleep_for(std::chrono::milliseconds(750));
             }
 #endif
             queued_max_hns_ = (std::max)(queued_max_hns_, began - input.received_hns);
@@ -939,7 +1072,20 @@ class Stream {
       report_["lostSamples"] = lost_samples_;
       report_["deviceGapSamples"] = gap_samples_;
       report_["timestampErrors"] = timestamp_errors_;
+      report_["timestampPlacement"] = timestamp_report();
+      report_["clockRateEstimator"] = clock_report();
+      report_["driftCorrectionPpm"] = ppm_;
+      report_["observedDriftPpm"] = observed_ppm_;
+      report_["inputSamples"] = captured_;
+      report_["outputSamples"] = wave_.count();
+      report_["packets"] = packets_;
+      report_["discontinuities"] = discontinuities_;
+      report_["discontinuityFlagsWithContinuousTiming"] = continuous_timing_discontinuities_;
       report_["packetHandoff"] = handoff_report();
+      report_["storageWrites"] = wave_.storage_report();
+      report_["preparation"] = preparation_report();
+      report_["kind"] = plan_.at("kind");
+      report_["endpointId"] = plan_.at("endpointId");
       report_["firstError"] = {{"code", e.code},
                                {"stage", e.stage},
                                {"hresult", e.native},
@@ -949,7 +1095,15 @@ class Stream {
       std::lock_guard lock(mutex_);
       report_["packetTimestamps"] = packet_timestamps_;
       report_["recentPacketTimestamps"] = recent_timestamps_;
+      report_["timestampPlacement"] = timestamp_report();
+      report_["clockRateEstimator"] = clock_report();
+      report_["driftCorrectionPpm"] = ppm_;
+      report_["observedDriftPpm"] = observed_ppm_;
       report_["packetHandoff"] = handoff_report();
+      report_["storageWrites"] = wave_.storage_report();
+      report_["preparation"] = preparation_report();
+      report_["kind"] = plan_.at("kind");
+      report_["endpointId"] = plan_.at("endpointId");
       report_["firstError"] = {{"code", NSS_E_INTERNAL},
                                {"stage", NSS_STAGE_AUDIO},
                                {"hresult", 0},
@@ -967,6 +1121,53 @@ class Stream {
 
 public:
 #ifdef NSS_AUDIO_QUALIFICATION
+  static Json live_storage_stall(const std::string &filename) {
+    const auto available = devices(NSS_SOURCE_LOOPBACK).at("devices");
+    if (available.empty()) throw std::runtime_error("No loopback endpoint for storage qualification");
+    auto endpoint = available.front();
+    for (const auto &candidate : available) if (candidate.value("default", false)) endpoint = candidate;
+    Stream stream({{"path", filename}, {"kind", "loopback"}, {"endpointId", endpoint.at("id")}});
+    stream.wave_.set_write_stall_for_test(12000);
+    stream.prepare();
+    SessionClock clock;
+    const auto begin = qpc_hns(); clock.start(begin); stream.start(clock);
+    while (qpc_hns() - begin < 3 * hns_per_second) {
+      stream.check(); std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    const auto end = qpc_hns(); clock.stop(end); stream.finish(clock.active_time(end));
+    auto result = stream.snapshot();
+    result["storageWrites"] = stream.wave_.storage_report();
+    const auto &storage = result.at("storageWrites");
+    if (storage.at("maximumWriteMs").get<double>() < 12000 ||
+        storage.at("pendingBytes") != 0 || storage.at("submittedBytes") != storage.at("completedBytes") ||
+        result.at("lostSamples") != 0 || result.at("deviceGapSamples") != 0 || result.at("finalized") != true)
+      throw std::runtime_error("Audio was lost or finalization overtook the delayed storage writer");
+    result["injectedStorageStallMs"] = 12000;
+    return result;
+  }
+  static Json live_prepare_storage(const std::string &filename) {
+    const auto available = devices(NSS_SOURCE_LOOPBACK).at("devices");
+    if (available.empty()) throw std::runtime_error("No loopback endpoint for preparation qualification");
+    auto endpoint = available.front();
+    for (const auto &candidate : available) if (candidate.value("default", false)) endpoint = candidate;
+    Stream stream({{"path", filename}, {"kind", "loopback"}, {"endpointId", endpoint.at("id")}});
+    stream.wave_.set_open_stall_for_test(4500);
+    stream.prepare();
+    SessionClock clock;
+    const auto begin = qpc_hns();
+    clock.start(begin); stream.start(clock);
+    while (qpc_hns() - begin < 2 * hns_per_second) {
+      stream.check(); std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    const auto end = qpc_hns(); clock.stop(end); stream.finish(clock.active_time(end));
+    auto result = stream.snapshot();
+    if (result.at("preparation").at("filePreparationMs").get<double>() < 4500 ||
+        result.at("preparation").at("endpointPreparationMs").get<double>() >= 3000 ||
+        result.at("lostSamples") != 0 || result.at("finalized") != true)
+      throw std::runtime_error("Slow output-file preparation consumed the audio device initialization deadline");
+    result["injectedFilePreparationStallMs"] = 4500;
+    return result;
+  }
   static Json live_handoff(const std::string &filename) {
     const auto endpoints = devices(NSS_SOURCE_LOOPBACK).at("devices");
     if (endpoints.empty()) throw std::runtime_error("Live handoff requires a render endpoint");
@@ -990,9 +1191,10 @@ public:
     const auto report = stream.snapshot();
     if (!stream.qualification_stall_done_ || report.at("lostSamples") != 0 ||
         report.at("packetHandoff").at("queuedFrames") != 0 ||
-        report.at("packetHandoff").at("packetProcessingMaxMs").get<double>() < 250 ||
-        report.at("packetHandoff").at("peakQueuedFrames").get<uint64_t>() < stream.rate_ / 5)
-      throw std::runtime_error("Real audio handoff did not preserve packets through the owned 250ms stall");
+        report.at("packetHandoff").at("packetProcessingMaxMs").get<double>() < 750 ||
+        report.at("packetHandoff").at("peakQueuedFrames").get<uint64_t>() < stream.rate_ / 2 ||
+        report.at("packetHandoff").at("pendingDurationLimitMs") != PacketQueue::recording_pending_ms)
+      throw std::runtime_error("Real audio handoff did not preserve packets through the owned 750ms stall");
     return report;
   }
   static Json fixture(const std::string &filename, uint32_t rate,
@@ -1030,6 +1232,8 @@ public:
           epoch + 2500000 +
           static_cast<int64_t>(double(pos) * hns_per_second /
                                (rate * (1 + drift * 1e-6))));
+      // Clock metadata noise must not change the actual source waveform.
+      const auto physical_qpc = qpc;
       uint64_t position = scale_floor(pos, position_rate, rate);
       DWORD flags{};
       const uint32_t frames = partial_first && pos == 0 ? quantum - 17 : quantum;
@@ -1055,8 +1259,28 @@ public:
         flags = AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY;
       if (fault == 10 && pos >= quantum * 10)
         position += pos / quantum - 9;
+      if (fault == 11 && pos == quantum * 10)
+        flags = AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY | AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR;
+      if (fault == 12 && pos == quantum * 10) {
+        flags = AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY;
+        position += position_rate / 100;
+      }
+      const auto packet_index = pos / quantum;
+      const bool near_cut = packet_index == 10 || packet_index == 98 || packet_index == 131;
+      if (fault == 13 && near_cut) qpc += 200759; // Physical HyperX failure: 20.0759 ms.
+      if (fault == 14 && near_cut) qpc += 690000;
+      if (fault == 15 && near_cut) qpc -= 50000;
+      if (fault == 16 && packet_index % 3 != 0)
+        qpc = packet_index % 3 == 1 ? qpc + 200759 : qpc - 50000;
+      if (fault == 17 && packet_index >= 10) qpc += 200759;
+      if (fault == 18 && packet_index == 10) qpc += 700001;
+      if (fault == 19 && packet_index == 10) qpc -= 1000000;
+      if (fault == 20 && near_cut) qpc += 700000;
+      if (fault == 21 && packet_index >= 200) qpc += 16428;
+      if (fault == 22 && packet_index >= 100)
+        qpc = packet_index / 100 % 2 ? qpc + 8000 : qpc - 8000;
       for (uint32_t i = 0; i < quantum; ++i) {
-        const auto at = qpc + static_cast<uint64_t>(sample_time(i, rate));
+        const auto at = physical_qpc + static_cast<uint64_t>(sample_time(i, rate));
         const double hz = pause && at >= uint64_t(epoch + 12345678) &&
                                   at < uint64_t(epoch + 15679011)
                               ? 4000
@@ -1079,11 +1303,18 @@ public:
   explicit Stream(Json plan) : plan_(std::move(plan)) {}
   ~Stream() { stop(); }
   void prepare() {
+    // Open/write the owned output before starting the endpoint deadline. A
+    // delayed disk write is not an audio-device initialization failure. This
+    // runs on the native preparation worker, never the application UI thread.
+    const auto file_started = qpc_hns();
+    wave_.open(plan_.at("path"), plan_.value("gain", 1.f));
+    file_preparation_hns_ = qpc_hns() - file_started;
+    endpoint_preparation_started_ = qpc_hns();
     thread_ = std::thread([this] { run(); });
     std::unique_lock lock(mutex_);
     if (!changed_.wait_for(lock, std::chrono::seconds(3),
                            [&] { return ready_; }))
-      throw Error(NSS_E_TIMEOUT, NSS_STAGE_AUDIO, 0, "Audio Prepare timed out");
+      throw Error(NSS_E_TIMEOUT, NSS_STAGE_AUDIO, 0, "Audio device initialization timed out (3000 ms)");
     if (fault_)
       throw Error(fault_.code, fault_.stage, fault_.hresult,
                   fault_.message.c_str());
@@ -1111,6 +1342,7 @@ public:
   }
   void check() {
     std::lock_guard lock(mutex_);
+    wave_.check();
     if (fault_)
       throw Error(fault_.code, fault_.stage, fault_.hresult,
                   fault_.message.c_str());
@@ -1130,6 +1362,8 @@ public:
     report_["outputSamples"] = target;
     report_["terminalAlignmentSilenceSamples"] = terminal_pad_;
     report_["initialOrLoopbackIdleSilenceSamples"] = idle_samples_;
+    report_["storageWrites"] = wave_.storage_report();
+    report_["packetHandoff"] = handoff_report();
     report_["finalized"] = true;
     report_["durationHns"] = hns;
   }
@@ -1209,10 +1443,14 @@ Json validate(const Json &request, const std::string &video_path) {
   std::vector<std::wstring> paths;
   std::vector<std::string> kinds;
   for (auto &item : result) {
-    if (!item.is_object() || item.size() != 3 || !item.contains("kind") ||
+    if (!item.is_object() || item.size() != 3 + size_t(item.contains("gain")) || !item.contains("kind") ||
         !item.contains("endpointId") || !item.contains("path"))
       throw std::invalid_argument(
           "Audio source requires kind, endpointId and path");
+    if (item.contains("gain") && (!item.at("gain").is_number() ||
+        !std::isfinite(item.at("gain").get<double>()) || item.at("gain").get<double>() < 0 ||
+        item.at("gain").get<double>() > 1))
+      throw std::invalid_argument("Recording audio gain must be between 0 and 1");
     const auto kind = item.at("kind").get<std::string>();
     if (kind != "microphone" && kind != "loopback")
       throw std::invalid_argument("Unsupported audio source kind");
@@ -1287,9 +1525,14 @@ Json qualify(const std::string &scope, const std::string &directory) {
   };
   if(scope == "handoff-live") {
     cases.push_back(Stream::live_handoff(filename()));
+  } else if(scope == "storage-stall-live") {
+    cases.push_back(Stream::live_storage_stall(filename()));
+  } else if(scope == "prepare-storage-live") {
+    cases.push_back(Stream::live_prepare_storage(filename()));
   } else if(scope == "pcm-store") {
+    for (const float recording_gain : {0.f, .25f, .8f, 1.f}) {
     const auto path=filename();
-    Wave wave;wave.open(path);
+    Wave wave;wave.open(path, recording_gain);
     std::vector<int16_t> expected;
     const std::array<float,12> edges{0.f,-0.f,1.f,-1.f,1.5f,-1.5f,
       .5f/32768,-.5f/32768,std::nextafter(.5f/32768,0.f),
@@ -1306,6 +1549,7 @@ Json qualify(const std::string &scope, const std::string &directory) {
         // precision and PCM half-away-from-zero quantization.
         for(float value:sample) {
           value*=begin_gain;
+          value*=recording_gain;
           expected.push_back(static_cast<int16_t>(std::lround(
             std::clamp(value*end_gain,-1.f,32767.f/32768)*32768.f)));
         }
@@ -1326,8 +1570,18 @@ Json qualify(const std::string &scope, const std::string &directory) {
     check(bytes.size()==80+expected.size()*sizeof(int16_t),"PCM writer byte count changed");
     check(std::memcmp(bytes.data()+80,expected.data(),expected.size()*sizeof(int16_t))==0,
       "PCM writer changed a ramp, clipped value, signed zero or rounding boundary");
-    cases.push_back({{"path",path},{"pcmFramesCompared",expected.size()/2},
+    cases.push_back({{"path",path},{"gain",recording_gain},{"pcmFramesCompared",expected.size()/2},
       {"bitExactClosedFormReference",true},{"tailStorage", "fixed96frame ring"}});
+    }
+    for (const float invalid_gain : {-.1f, 1.1f, std::numeric_limits<float>::infinity(),
+                                    std::numeric_limits<float>::quiet_NaN()}) {
+      const auto path = filename();
+      bool rejected{};
+      try { Wave wave; wave.open(path, invalid_gain); }
+      catch (const std::invalid_argument &) { rejected = true; }
+      check(rejected && !std::filesystem::exists(wide(path)), "Invalid audio gain opened an output file");
+    }
+    cases.push_back({{"invalidGainsRejectedBeforeFileOpen", true}, {"unityGainPreservesExistingPcm", true}});
   } else if (scope == "resample" || scope == "pause") {
     for (const auto rate : {44100u, 48000u})
       for (const auto channels : {1u, 2u}) {
@@ -1360,7 +1614,60 @@ Json qualify(const std::string &scope, const std::string &directory) {
           partial.at("deviceGapSamples") == 0 && partial.at("packetPositionRate") == 16000,
           "Initial converter cut discarded or invented PCM samples");
     cases.push_back(std::move(partial));
-    for (int fault : {1, 2, 3, 7, 8, 9, 10}) {
+    for (const auto position_rate : {16000u, 48000u}) {
+      const auto reference_path = filename(), flagged_path = filename();
+      const auto reference = Stream::fixture(reference_path, 48000, 2, false, 0, 0, position_rate);
+      auto flagged = Stream::fixture(flagged_path, 48000, 2, false, 0, 9, position_rate);
+      auto bytes = [](const std::string &path) {
+        std::ifstream input(std::filesystem::path(wide(path)), std::ios::binary);
+        return std::vector<char>((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+      };
+      check(flagged.at("discontinuityFlagsWithContinuousTiming") == 1 &&
+            flagged.at("discontinuities") == 1 && flagged.at("lostSamples") == 0 &&
+            flagged.at("deviceGapSamples") == 0 && flagged.at("timestampErrors") == 0,
+            "A continuous-timing driver flag lost its diagnostic or changed the timeline");
+      check(flagged.at("outputSamples") == reference.at("outputSamples") &&
+            bytes(reference_path) == bytes(flagged_path),
+            "A continuous-timing driver flag changed the recorded PCM/RF64 bytes");
+      flagged["bitExactWithoutDiscontinuityFlag"] = true;
+      cases.push_back(std::move(flagged));
+    }
+    for (const auto position_rate : {16000u, 48000u}) {
+      for (const bool paused : {false, true}) {
+        const auto reference_path = filename();
+        const auto reference = Stream::fixture(reference_path, 48000, 2, paused, 0, 0, position_rate);
+        auto bytes = [](const std::string &path) {
+          std::ifstream input(std::filesystem::path(wide(path)), std::ios::binary);
+          return std::vector<char>((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+        };
+        const auto reference_bytes = bytes(reference_path);
+        for (const int fault : {13, 14, 15, 16, 17, 20}) {
+          const auto jittered_path = filename();
+          auto jittered = Stream::fixture(jittered_path, 48000, 2, paused, 0, fault, position_rate);
+          const auto &placement = jittered.at("timestampPlacement");
+          check(jittered.at("lostSamples") == 0 && jittered.at("deviceGapSamples") == 0 &&
+                jittered.at("timestampErrors") == 0 && jittered.at("finalized") == true,
+                "Bounded QPC jitter interrupted continuous PCM samples");
+          check(placement.at("smoothedPackets").get<uint64_t>() > 0 &&
+                placement.at("rejectedClockObservations").get<uint64_t>() > 0 &&
+                placement.at("maximumRawResidualMs").get<double>() <= 70.00001 &&
+                placement.at("rawPacketTimestampsPreserved") == true,
+                "QPC jitter was hidden or trained the audio clock estimator");
+          check(jittered.at("packetTimestamps").at(10).at("qpcHns") !=
+                    reference.at("packetTimestamps").at(10).at("qpcHns"),
+                "Original jittered packet QPC was overwritten in diagnostics");
+          check(jittered.at("outputSamples") == reference.at("outputSamples") &&
+                jittered.at("pausedInputSamplesRemoved") == reference.at("pausedInputSamplesRemoved") &&
+                bytes(jittered_path) == reference_bytes,
+                "Bounded QPC jitter changed PCM/RF64 bytes or a pause boundary");
+          jittered["qualificationFault"] = fault;
+          jittered["pauseBoundariesVerified"] = paused;
+          jittered["bitExactWithoutTimestampJitter"] = true;
+          cases.push_back(std::move(jittered));
+        }
+      }
+    }
+    for (int fault : {1, 2, 3, 7, 8, 10, 11, 12, 18, 19}) {
       bool failed{};
       try { Stream::fixture(filename(), 48000, 2, false, 0, fault, 16000); }
       catch (const Error &e) { failed = e.stage == NSS_STAGE_AUDIO; }
@@ -1387,13 +1694,36 @@ Json qualify(const std::string &scope, const std::string &directory) {
       check(failed, "Invalid clock/lost sample/WAV write was accepted");
       cases.push_back({{"expectedFault", fault}, {"passed", true}});
     }
+    // A real sustained clock-rate difference is observable and correction is
+    // bounded; it must not discard continuous source samples merely because
+    // a ppm estimate crosses the resampler's limit.
+    auto limited = Stream::fixture(filename(), 48000, 2, false, 300);
+    check(std::abs(limited.at("observedDriftPpm").get<double>() - 300) < 1 &&
+          std::abs(limited.at("driftCorrectionPpm").get<double>()) <= 200 &&
+          limited.at("clockRateEstimator").at("limitedCorrectionPackets").get<uint64_t>() > 0 &&
+          limited.at("lostSamples") == 0 && limited.at("deviceGapSamples") == 0 &&
+          limited.at("outputSamples") == 288000 && limited.at("finalized") == true,
+          "Out-of-budget estimate lost continuous audio or exceeded the correction bound");
+    cases.push_back(std::move(limited));
+    for (const int fault : {21, 22}) {
+      auto noisy = Stream::fixture(filename(), 48000, 2, false, 0, fault);
+      check(noisy.at("clockRateEstimator").at("limitedCorrectionPackets").get<uint64_t>() > 0 &&
+            noisy.at("clockRateEstimator").at("maximumObservedAbsolutePpm").get<double>() > 200 &&
+            std::abs(noisy.at("driftCorrectionPpm").get<double>()) <= 200 &&
+            noisy.at("timestampPlacement").at("maximumRawResidualMs").get<double>() < 3 &&
+            noisy.at("lostSamples") == 0 && noisy.at("deviceGapSamples") == 0 &&
+            noisy.at("outputSamples") == 288000 && noisy.at("finalized") == true,
+            "Small QPC offsets became fatal clock drift or lost PCM");
+      noisy["qualificationFault"] = fault;
+      cases.push_back(std::move(noisy));
+    }
     bool exceeded{};
     try {
-      Stream::fixture(filename(), 48000, 2, false, 300);
+      Stream::fixture(filename(), 48000, 2, false, 20000);
     } catch (const Error &e) {
       exceeded = e.stage == NSS_STAGE_AUDIO;
     }
-    check(exceeded, "Out-of-budget drift was accepted");
+    check(exceeded, "Actual clock divergence beyond the smoothing tolerance was accepted");
     cases.push_back(Stream::fixture(filename(), 48000, 2, false, 0, 4));
     cases.push_back(Stream::fixture(filename(), 48000, 2, false, 0, 5));
   } else if (scope == "rf64") {

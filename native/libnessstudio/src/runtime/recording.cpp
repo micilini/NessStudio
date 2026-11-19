@@ -272,17 +272,18 @@ Plan plan(const Json &request) {
              "Recording manifest paths must also be new");
   if (request.contains("audio"))
     result.audio = audio::validate(request.at("audio"), result.output);
-  // An interactive session has no planned end. Reserve one minute plus the
-  // same 1 GiB safety margin; output I/O failures still fail the actual
-  // session.
+  // Interactive recordings use the host's monitored 50 MiB stop boundary.
+  // Finite jobs still require their estimated output plus a 1 GiB reserve.
   const auto estimate_ms = result.interactive ? 60000ULL : duration;
   result.estimated_bytes = estimate_ms * c.bitrate_bps / 8000 +
                            estimate_ms * 192 * result.audio.size();
   result.available_bytes = std::filesystem::space(path.parent_path()).available;
-  if (result.available_bytes < result.estimated_bytes + 1024ULL * 1024 * 1024)
+  const auto required_bytes = result.interactive ? 50ULL * 1024 * 1024
+      : result.estimated_bytes + 1024ULL * 1024 * 1024;
+  if (result.available_bytes < required_bytes)
     reject(NSS_E_IO, NSS_STAGE_STORAGE,
-           "Recording preflight requires estimated encoded bytes plus a 1 GiB "
-           "reserve");
+           result.interactive ? "Not enough free disk space to start recording; at least 50 MiB are required"
+                              : "Recording preflight requires estimated encoded bytes plus a 1 GiB reserve");
   return result;
 }
 class Recording final : public Backend {
@@ -713,9 +714,9 @@ class Recording final : public Backend {
           codec_set_ = true;
         }
       }
-      const auto write_started = plan_.capture.trace ? qpc_hns() : 0;
+      const auto write_started = qpc_hns();
       checked(ness_mkv_write_packet_v2(muxer_, packet, &error), error);
-      if (plan_.capture.trace) muxer_calls_.observe(write_started, true);
+      muxer_calls_.observe(write_started, true);
       ++packets_;
     }
     reap();
@@ -946,7 +947,7 @@ class Recording final : public Backend {
     // Releasing the remaining candidates after one attempt truncates the tail
     // (especially the program track's two-frame completion grace).
     // This completion budget never extends the acquisition interval or changes
-    // timestamps. The session's overall five-second Stop deadline still applies.
+    // timestamps. The session's bounded Stop deadline still applies.
     const auto deadline = qpc_hns() + hns_per_second;
     for (;;) {
       schedule(active, true);

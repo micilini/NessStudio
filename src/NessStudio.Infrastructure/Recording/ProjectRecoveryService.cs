@@ -8,14 +8,18 @@ public static class ProjectRecoveryService
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
     public static void Stage(string directory, SessionManifest manifest, string? error = null)
     {
+        if (manifest.Metadata is { } metadata)
+        {
+            metadata.Recovery = JsonSerializer.SerializeToElement(new { version = 1, resolved = false, sourceAssetsPreserved = true, error }, Options);
+            ProjectMetadataStore.Consolidate(directory, manifest);
+            return;
+        }
         byte[] bytes=JsonSerializer.SerializeToUtf8Bytes(new { version=1,resolved=false,sourceAssetsPreserved=true,error,manifest },Options);
         ProjectManifestStore.WriteAtomic(Path.Combine(directory,"project-recovery.json"),bytes,overwrite:true);
     }
     public static bool IsAvailable(string directory)
     {
-        string path=Path.Combine(directory,"project-recovery.json");
-        if(!File.Exists(path))return false;
-        try { using var document=Read(path);return document.RootElement.GetProperty("version").GetInt32()==1&&!document.RootElement.GetProperty("resolved").GetBoolean(); }
+        try { using var document=ProjectMetadataStore.ReadDocument(directory,"project-recovery.json");return document is not null&&document.RootElement.GetProperty("version").GetInt32()==1&&!document.RootElement.GetProperty("resolved").GetBoolean(); }
         catch(Exception error)when(error is IOException or InvalidDataException or JsonException or InvalidOperationException or KeyNotFoundException or FormatException){return false;}
     }
     private static JsonDocument Read(string path)
@@ -36,5 +40,18 @@ public static class ProjectRecoveryService
         if(root.TryGetProperty("error",out var error)&&error.ValueKind==JsonValueKind.String){manifest.InterruptionCause=error.GetString();manifest.Errors.Add(error.GetString()!);}
         string result=ProjectManifestStore.WriteAliases(directory,manifest,overwrite:true);Resolve(directory,manifest.ProjectId!);return result;
     }
-    public static void Resolve(string directory,string projectId) => ProjectManifestStore.WriteAtomic(Path.Combine(directory,"project-recovery.json"),JsonSerializer.SerializeToUtf8Bytes(new {version=1,resolved=true,projectId,sourceAssetsPreserved=true},Options),overwrite:true);
+    public static void Resolve(string directory,string projectId)
+    {
+        if (File.Exists(Path.Combine(directory,"manifest.json")))
+        {
+            var manifest = ProjectManifestStore.Read(directory).Manifest;
+            if (manifest.Metadata is { } metadata)
+            {
+                metadata.Recovery = JsonSerializer.SerializeToElement(new {version=1,resolved=true,projectId,sourceAssetsPreserved=true},Options);
+                ProjectManifestStore.WriteAliases(directory,manifest,overwrite:true);
+                return;
+            }
+        }
+        ProjectManifestStore.WriteAtomic(Path.Combine(directory,"project-recovery.json"),JsonSerializer.SerializeToUtf8Bytes(new {version=1,resolved=true,projectId,sourceAssetsPreserved=true},Options),overwrite:true);
+    }
 }

@@ -10,6 +10,10 @@ namespace NessStudio.Models
         public int RecordingFps { get; set; } = 30;
         /// <summary>Gets or sets the recording execution policy; absent preferences retain Automatic.</summary>
         public NessStudio.Recording.Engines.RecordingExecutionMode ExecutionMode { get; set; }
+        /// <summary>Gets or sets the application's microphone recording level (0–100 percent).</summary>
+        public double MicrophoneLevel { get; set; } = 100;
+        /// <summary>Gets or sets the application's loopback recording level (0–100 percent).</summary>
+        public double SystemAudioLevel { get; set; } = 100;
         /// <summary>Gets or sets the preference creation time.</summary>
         public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
         /// <summary>Gets or sets the last persisted update time.</summary>

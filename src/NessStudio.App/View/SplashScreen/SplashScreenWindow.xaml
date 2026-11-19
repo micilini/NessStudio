@@ -181,16 +181,30 @@
                                 <ControlTemplate TargetType="ProgressBar">
                                     <Border Background="{TemplateBinding Background}" CornerRadius="3"
                                             SnapsToDevicePixels="True" UseLayoutRounding="True">
-                                        <Border x:Name="SolidIndicator" Background="{TemplateBinding Foreground}" CornerRadius="3" />
+                                        <Grid ClipToBounds="True">
+                                            <Border x:Name="SolidIndicator" Background="{TemplateBinding Foreground}" CornerRadius="3" />
+                                            <Border CornerRadius="3">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                        <GradientStop x:Name="LoadingStart" Color="#005384B5" Offset="-0.3" />
+                                                        <GradientStop x:Name="LoadingCenter" Color="#FFC0E4FF" Offset="-0.15" />
+                                                        <GradientStop x:Name="LoadingEnd" Color="#005384B5" Offset="0" />
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                            </Border>
+                                        </Grid>
                                     </Border>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsIndeterminate" Value="True">
                                             <Trigger.EnterActions>
                                                 <BeginStoryboard>
                                                     <Storyboard>
-                                                        <DoubleAnimation Storyboard.TargetName="SolidIndicator" Storyboard.TargetProperty="Opacity"
-                                                                         From="0.65" To="1" Duration="0:0:0.9"
-                                                                         AutoReverse="True" RepeatBehavior="Forever" />
+                                                        <DoubleAnimation Storyboard.TargetName="LoadingStart" Storyboard.TargetProperty="Offset"
+                                                                         From="-0.3" To="1" Duration="0:0:1.4" RepeatBehavior="Forever" />
+                                                        <DoubleAnimation Storyboard.TargetName="LoadingCenter" Storyboard.TargetProperty="Offset"
+                                                                         From="-0.15" To="1.15" Duration="0:0:1.4" RepeatBehavior="Forever" />
+                                                        <DoubleAnimation Storyboard.TargetName="LoadingEnd" Storyboard.TargetProperty="Offset"
+                                                                         From="0" To="1.3" Duration="0:0:1.4" RepeatBehavior="Forever" />
                                                     </Storyboard>
                                                 </BeginStoryboard>
                                             </Trigger.EnterActions>

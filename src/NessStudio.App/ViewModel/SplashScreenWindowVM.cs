@@ -1,4 +1,4 @@
-﻿using NessStudio.ViewModel.Helpers;
+using NessStudio.ViewModel.Helpers;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -26,10 +26,10 @@ namespace NessStudio.ViewModel
             }
             catch (Exception ex)
             {
-                System.Windows.MessageBox.Show("App settings could not be loaded.\n" + ex.Message,
+                MessageBox.Show("App settings could not be loaded.\n" + UserError.Message(ex),
                     "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
                 System.Windows.Application.Current.Shutdown(-1);
             }
         }
     }
-}
+}

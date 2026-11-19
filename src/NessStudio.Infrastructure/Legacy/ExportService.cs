@@ -153,7 +153,7 @@ namespace NessStudio.ViewModel.Helpers
             }
             catch(OperationCanceledException){return Fail("Export cancelled. Completed tracks and owned partials are preserved.",request.OutputPath);}
             catch(Exception error)when(error is IOException or InvalidDataException or InvalidOperationException or ArgumentException or JsonException or NessStudio.Interop.Native.NativeEngineException)
-            {return Fail(error.Message,request.OutputPath,error.ToString());}
+            {return Fail(UserError.Message(error),request.OutputPath,UserError.Details(error));}
         }
         private static long Ticks(string? duration) => TimeSpan.TryParse(duration,CultureInfo.InvariantCulture,out var time)?Math.Max(0,time.Ticks):0;
         private static object BuildProject(RecordingExportSessionInfo info,RecordingExportRequest request,bool raw)

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -39,7 +39,7 @@ namespace NessStudio.View.AboutScreen
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Unable to open the browser. Error: {ex.Message}",
+                MessageBox.Show($"Unable to open the browser. Error: {UserError.Message(ex)}",
                                 "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -86,7 +86,7 @@ namespace NessStudio.View.AboutScreen
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Unable to update debug log settings. Error: {ex.Message}",
+                MessageBox.Show($"Unable to update debug log settings. Error: {UserError.Message(ex)}",
                                 "Error",
                                 MessageBoxButton.OK,
                                 MessageBoxImage.Error);
@@ -106,4 +106,4 @@ namespace NessStudio.View.AboutScreen
             this.Close();
         }
     }
-}
+}

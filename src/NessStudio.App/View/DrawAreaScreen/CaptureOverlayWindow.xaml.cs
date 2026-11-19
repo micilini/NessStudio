@@ -1,4 +1,4 @@
-﻿using NessStudio.ViewModel.Helpers;
+using NessStudio.ViewModel.Helpers;
 using System;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -120,7 +120,7 @@ namespace NessStudio.View.DrawAreaScreen
             }
             catch (Exception ex)
             {
-                DebugLog.Write("[CaptureOverlay] ApplyWindowStylesAndCaptureExclusion ERROR:\n" + ex);
+                DebugLog.Write("[CaptureOverlay] ApplyWindowStylesAndCaptureExclusion ERROR:\n" + UserError.Details(ex));
             }
         }
 
@@ -163,7 +163,7 @@ namespace NessStudio.View.DrawAreaScreen
             }
             catch (Exception ex)
             {
-                DebugLog.Write("[CaptureOverlay] Redraw ERROR:\n" + ex);
+                DebugLog.Write("[CaptureOverlay] Redraw ERROR:\n" + UserError.Details(ex));
             }
         }
 
